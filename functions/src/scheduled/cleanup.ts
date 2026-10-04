@@ -8,7 +8,8 @@ import { auditInTx } from '../lib/audit';
 import { db } from '../lib/firebase';
 import { MESSAGES } from '../lib/errors';
 import { getReferral, referralRef } from '../repositories';
-import { isSummaryGenerationActive } from '../services/summary/runSummary';
+import { isSummaryGenerationActive, runSummary } from '../services/summary/runSummary';
+import { processReferralRequest } from '../referrals/triggers';
 import { getSmsProvider, smsSecrets } from '../services/sms/provider';
 
 const DAY_MS = 86_400_000;
@@ -102,8 +103,33 @@ async function refreshSmsStatuses(): Promise<number> {
   return updated;
 }
 
-export const scheduledCleanup = onSchedule({ schedule: 'every 60 minutes', timeZone: 'Asia/Manila', secrets: smsSecrets(), timeoutSeconds: 300 }, async () => {
-  const nowMs = Date.now();
+/**
+ * Safety net for hosts without Firestore triggers (Vercel + Spark): emergency summaries still 'pending' a minute after
+ * sending (the post-response job died), and offline emergency requests still 'queued' after sync (the app never
+ * called processReferralRequest). Both operations are idempotent.
+ */
+async function sweepPendingWork(nowMs: number): Promise<number> {
+  let count = 0;
+  const minuteAgo = Timestamp.fromMillis(nowMs - 60_000);
+  const pending = await db().collection(COLLECTIONS.referrals).where('summary.state', '==', 'pending').limit(50).get();
+  for (const d of pending.docs) {
+    const r = d.data() as ReferralDoc;
+    if (r.type !== 'emergency' || r.createdAt.toMillis() > minuteAgo.toMillis()) continue;
+    await runSummary(d.id);
+    count++;
+  }
+  const queued = await db().collection(COLLECTIONS.referralRequests).where('state', '==', 'queued').limit(50).get();
+  for (const d of queued.docs) {
+    const created = (d.data() as { createdAt?: Timestamp }).createdAt;
+    if (created && created.toMillis() > minuteAgo.toMillis()) continue;
+    await processReferralRequest(d.id);
+    count++;
+  }
+  return count;
+}
+
+/** Runs every maintenance step; each step is isolated so one failure does not stop the rest. */
+export async function runCleanup(nowMs: number = Date.now()): Promise<Record<string, number | string>> {
   const results: Record<string, number | string> = {};
   const step = async (name: string, fn: () => Promise<number>) => {
     try {
@@ -119,5 +145,11 @@ export const scheduledCleanup = onSchedule({ schedule: 'every 60 minutes', timeZ
   await step('deletedTokens', () => deleteWhereBefore(COLLECTIONS.referralTokens, 'expiresAt' satisfies keyof ReferralTokenDoc, nowMs - 7 * DAY_MS));
   await step('deletedRateLimits', () => deleteWhereBefore(COLLECTIONS.rateLimits, 'expiresAt', nowMs));
   await step('smsStatusUpdates', refreshSmsStatuses);
+  await step('pendingWorkSwept', () => sweepPendingWork(nowMs));
   logger.info('cleanup complete', results);
+  return results;
+}
+
+export const scheduledCleanup = onSchedule({ schedule: 'every 60 minutes', timeZone: 'Asia/Manila', secrets: smsSecrets(), timeoutSeconds: 300 }, async () => {
+  await runCleanup();
 });

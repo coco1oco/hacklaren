@@ -1,11 +1,10 @@
-import { randomBytes } from 'node:crypto';
 import { Timestamp } from 'firebase-admin/firestore';
 import { onCall } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions/logger';
 import { z } from 'zod';
 import type { CreateStaffUserRequest, CreateStaffUserResponse, SetStaffActiveRequest, SetStaffActiveResponse, StaffDoc } from '../shared/contracts';
 import type { Role } from '../shared/types';
-import { phMobile } from '../shared/schemas';
+import { phMobile, staffPasswordSchema } from '../shared/schemas';
 import { requireRole, requireStaff, type StaffContext } from '../lib/auth';
 import { writeAudit } from '../lib/audit';
 import { adminAuth } from '../lib/firebase';
@@ -17,12 +16,17 @@ const createSchema = z.object({
   name: z.string().trim().min(1, { message: 'Name is required.' }).max(120),
   email: z.string().trim().toLowerCase().email({ message: 'Enter a valid email address.' }).max(200),
   contactNumber: phMobile,
-  role: z.enum(['midwife', 'clinic_admin', 'super_admin']),
+  // clinic_admin is the clinic owner: granted only by registerClinic, never created from the Staff page.
+  role: z.enum(['midwife', 'super_admin'], { message: 'Choose midwife or super admin.' }),
   clinicId: z.string().trim().min(1).max(64).nullable(),
+  // Assigned by the clinic owner / super admin. Passed straight to Firebase Auth; never stored or logged here.
+  password: staffPasswordSchema,
 });
 
 /** Pure permission check for staff creation (exported for tests). Returns an error message or null. */
 export function staffCreationError(ctx: Pick<StaffContext, 'role' | 'clinicId'>, target: { role: Role; clinicId: string | null }): string | null {
+  // The clinic owner (clinic_admin) is the person who registered the clinic; no one else can be made one.
+  if (target.role === 'clinic_admin') return 'Each clinic has one owner: the person who registered it. Add staff as midwives.';
   if (target.role === 'super_admin' && target.clinicId !== null) return 'Super admins are not assigned to a clinic.';
   if (target.role !== 'super_admin' && !target.clinicId) return 'Select a clinic for this user.';
   if (ctx.role === 'super_admin') return null;
@@ -48,11 +52,12 @@ export const createStaffUser = onCall<CreateStaffUserRequest>(callableOptions(),
 
     let uid: string;
     try {
-      const user = await adminAuth().createUser({ email: input.email, password: randomBytes(24).toString('base64url'), displayName: input.name, disabled: false });
+      const user = await adminAuth().createUser({ email: input.email, password: input.password, displayName: input.name, disabled: false });
       uid = user.uid;
     } catch (err) {
       const code = (err as { code?: string }).code ?? '';
       if (code === 'auth/email-already-exists') throw maraError('already-exists', 'VALIDATION', 'An account with this email already exists.');
+      if (code === 'auth/invalid-password') throw maraError('invalid-argument', 'VALIDATION', 'Use at least 8 characters for the password.');
       throw err;
     }
 
@@ -67,9 +72,8 @@ export const createStaffUser = onCall<CreateStaffUserRequest>(callableOptions(),
       throw err;
     }
 
-    const passwordResetLink = await adminAuth().generatePasswordResetLink(input.email);
     await writeAudit({ action: 'staff_created', actorKind: 'user', actorUid: ctx.uid, actorRole: ctx.role, clinicId: input.clinicId, patientId: null, referralId: null, details: { targetUid: uid, role: input.role } });
-    return { uid, passwordResetLink };
+    return { uid };
   } catch (err) {
     throw toHttpsError(err, 'Unable to create the staff account. Please try again.');
   }

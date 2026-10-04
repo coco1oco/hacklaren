@@ -471,12 +471,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Clinic server (join) codes: issued and checked only by Cloud Functions (registerClinic / joinClinic /
-    // getClinicJoinCode / rotateClinicJoinCode). Never listable or readable, so codes cannot be enumerated.
-    match /clinicJoinCodes/{document=**} {
-      allow read, write: if false;
-    }
-
     // Everything not matched above is denied by default (no catch-all allow).
   }
 }

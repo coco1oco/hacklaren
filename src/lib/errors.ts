@@ -92,15 +92,6 @@ export function authMessage(e: unknown): string {
       return 'An account with this email already exists. Sign in instead.';
     case 'auth/weak-password':
       return 'Choose a stronger password (at least 8 characters).';
-    case 'auth/invalid-phone-number':
-      return 'Enter a valid Philippine mobile number (09XXXXXXXXX).';
-    case 'auth/invalid-verification-code':
-      return 'That verification code is incorrect. Check the SMS and try again.';
-    case 'auth/code-expired':
-      return 'The verification code has expired. Request a new code.';
-    case 'auth/quota-exceeded':
-    case 'auth/captcha-check-failed':
-      return 'Unable to send a verification code right now. Please try again later.';
     default:
       return 'Unable to sign in. Please try again.';
   }

@@ -139,18 +139,15 @@ export const qSummaryContentSchema = z.object({
 
 export const declineReasonSchema = z.string().trim().min(3, { message: 'A decline reason is required.' }).max(1000);
 
-// ── Self-service onboarding ──────────────────────────────────────────────────
+// ── Accounts ─────────────────────────────────────────────────────────────────
+// Staff never self-register. The clinic owner (or a super admin) creates each staff account with an email and an
+// assigned password; staff sign in with exactly that email + password.
 
-/** Clinic server code: "XXXX-XXXX". Input is normalised (case, spaces, missing dash) before validation. */
-export function normalizeJoinCode(raw: string): string {
-  const s = String(raw ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '');
-  return s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4)}` : s;
-}
-
-export const joinCodeSchema = z
+/** Password assigned by the clinic owner / super admin when creating a staff account. */
+export const staffPasswordSchema = z
   .string()
-  .transform(normalizeJoinCode)
-  .pipe(z.string().regex(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/, { message: 'Enter the 8-character clinic server code, e.g. ROSA-2841.' }));
+  .min(8, { message: 'Use at least 8 characters for the password.' })
+  .max(128, { message: 'Password is too long.' });
 
 export const clinicRegistrationSchema = z.object({
   clinic: z.object({
@@ -166,13 +163,6 @@ export const clinicRegistrationSchema = z.object({
 });
 
 export type ClinicRegistrationInput = z.infer<typeof clinicRegistrationSchema>;
-
-export const joinClinicSchema = z.object({
-  code: joinCodeSchema,
-  name: requiredText(120, 'Your name'),
-});
-
-export type JoinClinicInput = z.input<typeof joinClinicSchema>;
 
 /** Raw link tokens are 32 random bytes encoded as base64url (43 chars). */
 export const rawTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);

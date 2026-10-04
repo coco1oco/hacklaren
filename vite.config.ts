@@ -6,6 +6,10 @@ import { fileURLToPath, URL } from 'node:url';
 
 // The frontend is a static SPA deployed to Vercel. Cloud Functions live in ./functions and deploy to Firebase.
 export default defineConfig({
+  // In dev, /api is served by scripts/dev-api.ts (same handlers as the Vercel functions) against the emulators.
+  server: {
+    proxy: { '/api': { target: 'http://127.0.0.1:8787', changeOrigin: false } },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -25,7 +29,7 @@ export default defineConfig({
         name: 'MARA — Maternal Referral and Admission',
         short_name: 'MARA',
         description: 'The patient moves. Her record moves with her.',
-        theme_color: '#9f1239',
+        theme_color: '#c2410c',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/dashboard',
@@ -40,6 +44,7 @@ export default defineConfig({
         // never by the service worker, and callable function responses are never cached.
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [],
       },
     }),

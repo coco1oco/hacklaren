@@ -134,13 +134,6 @@ describe('other collections — read scoping', () => {
     }
   });
 
-  it('clinic server codes are never readable or listable by any client', async () => {
-    for (const who of ['anon', 'noClaims', 'midwifeA', 'adminA', 'superAdmin'] as const) {
-      await assertFails(dbAs(env, who).doc('clinicJoinCodes/ROSA-2841').get());
-      await assertFails(dbAs(env, who).collection('clinicJoinCodes').where('clinicId', '==', CLINIC_A).get());
-    }
-  });
-
   it('clinics: own clinic staff and super_admin only', async () => {
     await assertSucceeds(dbAs(env, 'midwifeA').doc(`clinics/${CLINIC_A}`).get());
     await assertFails(dbAs(env, 'midwifeA').doc(`clinics/${CLINIC_B}`).get());
@@ -166,7 +159,6 @@ describe('server-only collections reject client writes', () => {
     ['smsLogs/sms-new', { clinicId: CLINIC_A, status: 'sent' }],
     [`midwives/${USERS.midwifeA.uid}`, { uid: USERS.midwifeA.uid, clinicId: CLINIC_A, role: 'clinic_admin' }],
     ['rateLimits/ip-1', { count: 0 }],
-    ['clinicJoinCodes/ROSA-2841', { clinicId: CLINIC_A, active: true }],
   ];
   for (const [path, data] of cases) {
     for (const who of ['midwifeA', 'adminA', 'superAdmin'] as const) {

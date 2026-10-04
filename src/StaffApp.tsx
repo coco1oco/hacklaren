@@ -10,7 +10,6 @@ import { Loading } from '@/components/ui';
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
 const SignupClinicPage = lazy(() => import('@/pages/auth/SignupClinicPage'));
-const JoinClinicPage = lazy(() => import('@/pages/auth/JoinClinicPage'));
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 const PatientsPage = lazy(() => import('@/pages/patients/PatientsPage'));
 const NewPatientPage = lazy(() => import('@/pages/patients/NewPatientPage'));
@@ -73,7 +72,6 @@ export default function StaffApp() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/signup" element={<SignupClinicPage />} />
-            <Route path="/join" element={<JoinClinicPage />} />
             <Route element={<ProtectedShell />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<HomeRoute />} />

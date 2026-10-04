@@ -1,12 +1,13 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-brand-50: #fff1f2;
-  --color-brand-100: #ffe4e6;
-  --color-brand-600: #e11d48;
-  --color-brand-700: #be123c;
-  --color-brand-800: #9f1239;
-  --color-brand-900: #881337;
+  /* Orange brand. 800/900 are used for buttons and brand text: white on #9a3412 is ~7.3:1 (WCAG AA/AAA for body text). */
+  --color-brand-50: #fff7ed;
+  --color-brand-100: #ffedd5;
+  --color-brand-600: #ea580c;
+  --color-brand-700: #c2410c;
+  --color-brand-800: #9a3412;
+  --color-brand-900: #7c2d12;
 }
 
 html {

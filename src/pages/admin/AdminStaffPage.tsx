@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { collection, query, where } from 'firebase/firestore';
 import { COLLECTIONS, type StaffDoc } from '@shared/contracts';
-import { phMobile } from '@shared/schemas';
+import { phMobile, staffPasswordSchema } from '@shared/schemas';
 import type { Role } from '@shared/types';
 import { useAuth } from '@/auth/AuthProvider';
 import { useAllClinics } from '@/data/hospitals';
@@ -13,19 +13,23 @@ import { useCollection } from '@/lib/firestore';
 import { api } from '@/lib/api';
 import { userMessage } from '@/lib/errors';
 import { useOnline } from '@/lib/useOnline';
-import { Alert, Badge, Button, Card, Loading, PageHeader, SelectField, TextField } from '@/components/ui';
+import { Alert, Badge, Button, Card, CheckboxField, Loading, PageHeader, SelectField, TextField } from '@/components/ui';
 
-const ROLE_LABELS: Record<Role, string> = { midwife: 'Midwife', clinic_admin: 'Clinic admin', super_admin: 'Super admin' };
+const ROLE_LABELS: Record<Role, string> = { midwife: 'Midwife', clinic_admin: 'Clinic owner', super_admin: 'Super admin' };
 
 const staffSchema = z
   .object({
     name: z.string().trim().min(1, { message: 'Name is required.' }).max(120),
     email: z.string().trim().email({ message: 'Enter a valid email address.' }),
     contactNumber: phMobile,
-    role: z.enum(['midwife', 'clinic_admin', 'super_admin']),
+    // Clinic owners are created only by registering a clinic.
+    role: z.enum(['midwife', 'super_admin']),
     clinicId: z.string(),
+    password: staffPasswordSchema,
+    confirmPassword: z.string(),
   })
-  .refine((v) => v.role === 'super_admin' || v.clinicId.length > 0, { message: 'Choose a clinic.', path: ['clinicId'] });
+  .refine((v) => v.role === 'super_admin' || v.clinicId.length > 0, { message: 'Choose a clinic.', path: ['clinicId'] })
+  .refine((v) => v.password === v.confirmPassword, { message: 'Passwords do not match.', path: ['confirmPassword'] });
 
 type StaffForm = z.infer<typeof staffSchema>;
 
@@ -36,11 +40,11 @@ export default function AdminStaffPage() {
   const online = useOnline();
   const clinics = useAllClinics(isSuper);
   const [filterClinic, setFilterClinic] = useState('');
-  const [created, setCreated] = useState<{ name: string; link: string } | null>(null);
+  const [created, setCreated] = useState<{ name: string; email: string } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [busyUid, setBusyUid] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
 
   const scopeClinic = isSuper ? filterClinic : ownClinic;
   const staffQ = useMemo(() => {
@@ -60,23 +64,24 @@ export default function AdminStaffPage() {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(staffSchema),
-    defaultValues: { name: '', email: '', contactNumber: '', role: 'midwife', clinicId: isSuper ? '' : (ownClinic ?? '') } as StaffForm,
+    defaultValues: { name: '', email: '', contactNumber: '', role: 'midwife', clinicId: isSuper ? '' : (ownClinic ?? ''), password: '', confirmPassword: '' } as StaffForm,
   });
   const role = useWatch({ control, name: 'role' });
 
   async function create(v: StaffForm) {
     setCreateError(null);
     setCreated(null);
-    setCopied(null);
     try {
-      const res = await api.createStaffUser({
+      await api.createStaffUser({
         name: v.name,
         email: v.email,
         contactNumber: v.contactNumber,
         role: isSuper ? v.role : 'midwife',
         clinicId: isSuper ? (v.role === 'super_admin' ? null : v.clinicId) : ownClinic,
+        password: v.password,
       });
-      setCreated({ name: v.name, link: res.passwordResetLink });
+      setCreated({ name: v.name, email: v.email.trim().toLowerCase() });
+      setShowPassword(false);
       reset();
     } catch (err) {
       setCreateError(userMessage(err, 'Could not create the account. Please try again.'));
@@ -97,15 +102,6 @@ export default function AdminStaffPage() {
     }
   }
 
-  async function copyLink(link: string) {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied('Link copied.');
-    } catch {
-      setCopied('Could not copy automatically. Press and hold the link to copy it.');
-    }
-  }
-
   return (
     <div className="space-y-4">
       <PageHeader title="Staff accounts" subtitle={isSuper ? 'All clinics' : 'Your clinic'} />
@@ -116,10 +112,28 @@ export default function AdminStaffPage() {
           <TextField label="Full name" {...register('name')} error={errors.name?.message} />
           <TextField label="Email" type="email" autoComplete="off" {...register('email')} error={errors.email?.message} />
           <TextField label="Mobile number" type="tel" inputMode="tel" placeholder="09XXXXXXXXX" {...register('contactNumber')} error={errors.contactNumber?.message} />
+          <div className="hidden md:block" />
+          <TextField
+            label="Password"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            hint="At least 8 characters. Give it to the staff member in person."
+            {...register('password')}
+            error={errors.password?.message}
+          />
+          <TextField
+            label="Confirm password"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            {...register('confirmPassword')}
+            error={errors.confirmPassword?.message}
+          />
+          <div className="md:col-span-2">
+            <CheckboxField label="Show password" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)} />
+          </div>
           {isSuper && (
             <SelectField label="Role" {...register('role')} error={errors.role?.message}>
               <option value="midwife">Midwife</option>
-              <option value="clinic_admin">Clinic admin</option>
               <option value="super_admin">Super admin</option>
             </SelectField>
           )}
@@ -145,17 +159,9 @@ export default function AdminStaffPage() {
           </Alert>
         )}
         {created && (
-          <div className="mt-3 rounded-lg border-2 border-brand-800 bg-brand-50 p-3">
-            <p className="font-bold">Account created for {created.name}.</p>
-            <p className="mt-1">Give this password-setup link to the new user. It is shown only once.</p>
-            <p className="mt-2 break-all rounded bg-white p-2 font-mono text-sm">{created.link}</p>
-            <Button variant="secondary" className="mt-2" onClick={() => copyLink(created.link)}>
-              Copy link
-            </Button>
-            <p aria-live="polite" className="mt-1 text-sm">
-              {copied}
-            </p>
-          </div>
+          <Alert tone="success" className="mt-3" title={`Account created for ${created.name}.`}>
+            They can now sign in with <strong>{created.email}</strong> and the password you set.
+          </Alert>
         )}
       </Card>
 
@@ -188,7 +194,7 @@ export default function AdminStaffPage() {
                       {s.name} {self && <span className="font-normal text-slate-700">(you)</span>}
                     </p>
                     <p className="text-sm text-slate-700">
-                      {s.email} · {s.contactNumber} · {ROLE_LABELS[s.role]}
+                      {[s.email, s.contactNumber, ROLE_LABELS[s.role]].filter(Boolean).join(' · ')}
                       {isSuper && ` · ${clinicName(s.clinicId)}`}
                     </p>
                   </div>

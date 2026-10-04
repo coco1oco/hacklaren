@@ -1,4 +1,6 @@
-// Single Firebase initialisation for the browser. Owned by foundation; mara-frontend may extend.
+// Single Firebase initialisation for the browser (Auth + Firestore only).
+// Server operations go to MARA's own API (/api/call/<name>, Vercel Functions), not Cloud Functions,
+// so the Firebase project can stay on the no-cost Spark plan.
 import { initializeApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth } from 'firebase/auth';
 import {
@@ -7,9 +9,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
-import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
-import { FUNCTIONS_REGION } from '@shared/contracts';
+import { getToken, initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from 'firebase/app-check';
 
 const env = import.meta.env;
 
@@ -22,12 +22,9 @@ export const app = initializeApp({
   appId: env.VITE_FIREBASE_APP_ID,
 });
 
-if (env.VITE_APPCHECK_SITE_KEY) {
-  initializeAppCheck(app, {
-    provider: new ReCaptchaEnterpriseProvider(env.VITE_APPCHECK_SITE_KEY),
-    isTokenAutoRefreshEnabled: true,
-  });
-}
+const appCheck: AppCheck | null = env.VITE_APPCHECK_SITE_KEY
+  ? initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(env.VITE_APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true })
+  : null;
 
 export const auth = getAuth(app);
 
@@ -36,20 +33,54 @@ export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 
-export const functions = getFunctions(app, env.VITE_FUNCTIONS_REGION || FUNCTIONS_REGION);
-
 export const usingEmulators = env.VITE_USE_EMULATORS === 'true';
 
 if (usingEmulators) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-  // Phone sign-in against the Auth emulator: skip real reCAPTCHA. OTP codes appear in the emulator log / UI.
-  auth.settings.appVerificationDisabledForTesting = true;
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
 }
 
-/** Typed callable helper. Use with the request/response types from @shared/contracts. */
+/** Error thrown by callable(); shaped like a FirebaseError so existing error mapping (code, details) keeps working. */
+export class CallableError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly details: unknown = null,
+  ) {
+    super(message);
+    this.name = 'CallableError';
+  }
+}
+
+const API_BASE = env.VITE_API_BASE_URL?.replace(/\/+$/, '') || '';
+
+/**
+ * Typed call to a MARA server function. Use with the request/response types from @shared/contracts.
+ * Sends the signed-in user's ID token (if any) and an App Check token when App Check is enabled.
+ */
 export function callable<Req, Res>(name: string) {
-  const fn = httpsCallable<Req, Res>(functions, name);
-  return async (data: Req): Promise<Res> => (await fn(data)).data;
+  return async (data: Req): Promise<Res> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const user = auth.currentUser;
+    if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
+    if (appCheck) {
+      try {
+        headers['X-Firebase-AppCheck'] = (await getToken(appCheck, false)).token;
+      } catch {
+        // The server decides whether a missing App Check token is acceptable.
+      }
+    }
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/api/call/${encodeURIComponent(name)}`, { method: 'POST', headers, body: JSON.stringify({ data }) });
+    } catch {
+      throw new CallableError('functions/unavailable', 'No internet connection or the server is unreachable.');
+    }
+    const body = (await res.json().catch(() => null)) as { result?: Res; error?: { status?: string; message?: string; details?: unknown } } | null;
+    if (!res.ok || !body || body.error) {
+      const status = body?.error?.status ?? (res.status >= 500 ? 'internal' : 'unknown');
+      throw new CallableError(`functions/${status}`, body?.error?.message ?? 'Request failed.', body?.error?.details ?? null);
+    }
+    return body.result as Res;
+  };
 }

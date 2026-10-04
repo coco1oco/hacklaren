@@ -22,7 +22,7 @@ import type {
   VisitClinical,
   AuditAction,
 } from './types';
-import type { EmergencyReferralInput, CheckupReferralInput, ClinicRegistrationInput, JoinClinicInput } from './schemas';
+import type { EmergencyReferralInput, CheckupReferralInput, ClinicRegistrationInput } from './schemas';
 import type { HospitalAction } from './referralStatus';
 
 /** Satisfied by both firebase/firestore Timestamp and firebase-admin Timestamp. */
@@ -49,18 +49,7 @@ export const COLLECTIONS = {
   referralRequests: 'referralRequests',
   /** Server-only rate-limit counters. */
   rateLimits: 'rateLimits',
-  /** Server-only. Doc id = clinic server (join) code, e.g. "ROSA-2841". Never readable by clients. */
-  clinicJoinCodes: 'clinicJoinCodes',
 } as const;
-
-/** clinicJoinCodes/{code} — server-only. A clinic has at most one active code; rotating deactivates the old one. */
-export interface ClinicJoinCodeDoc {
-  clinicId: string;
-  active: boolean;
-  createdAt: TimestampLike;
-  createdBy: string;
-  revokedAt: TimestampLike | null;
-}
 
 /** Custom claims set by Cloud Functions (never by the client). super_admin has clinicId null. */
 export interface MaraClaims {
@@ -325,9 +314,7 @@ export const CALLABLES = {
   setStaffActive: 'setStaffActive',
   getReferralReport: 'getReferralReport',
   registerClinic: 'registerClinic',
-  joinClinic: 'joinClinic',
-  getClinicJoinCode: 'getClinicJoinCode',
-  rotateClinicJoinCode: 'rotateClinicJoinCode',
+  processReferralRequest: 'processReferralRequest',
 } as const;
 
 /** A summary stuck in 'generating' longer than this (instance crash/timeout) is treated as failed and may be retried. */
@@ -478,18 +465,20 @@ export interface GenerateReferralPdfResponse {
   base64: string;
 }
 
-// createStaffUser — auth: clinic_admin (own clinic, role 'midwife' only) or super_admin (any clinic/role).
+// createStaffUser — auth: clinic_admin = clinic owner (own clinic, role 'midwife' only) or super_admin
+// ('midwife' for any clinic, or 'super_admin'). The admin assigns the password; staff sign in with email + password.
+// This is the ONLY way staff accounts are created (no self-registration).
 export interface CreateStaffUserRequest {
   name: string;
   email: string;
   contactNumber: string;
   role: Role;
   clinicId: string | null;
+  /** Assigned by the admin (min 8 chars). Sent once over HTTPS; never stored or logged by MARA. */
+  password: string;
 }
 export interface CreateStaffUserResponse {
   uid: string;
-  /** Password-setup link to hand to the new user. */
-  passwordResetLink: string;
 }
 
 // setStaffActive — auth: clinic_admin (own clinic midwives) or super_admin. Never deletes records.
@@ -538,31 +527,25 @@ export interface GetReferralReportResponse {
   totals: ReferralReportCounts;
 }
 
-// ── Self-service onboarding ──────────────────────────────────────────────────
+// processReferralRequest — auth: the clinic staff member who created referralRequests/{requestId}.
+// Turns a synced offline emergency request into a referral (idempotent). Needed where Firestore triggers are not
+// available (Vercel + Spark plan); harmless alongside the trigger on Blaze.
+export interface ProcessReferralRequestRequest {
+  requestId: string;
+}
+export interface ProcessReferralRequestResponse {
+  state: ReferralRequestDoc['state'];
+  referralId: string | null;
+  error: string | null;
+}
+
+// ── Clinic registration ──────────────────────────────────────────────────────
 
 // registerClinic — auth: a signed-in Firebase user with NO MARA role and no staff profile yet (just created with
-// email/password on the sign-up page). Creates the clinic, makes the caller its clinic_admin, issues the server code.
+// email/password on the sign-up page). Creates the clinic and makes the caller its owner (clinic_admin).
 export type RegisterClinicRequest = ClinicRegistrationInput;
 export interface RegisterClinicResponse {
   clinicId: string;
-  joinCode: string;
-}
-
-// joinClinic — auth: a signed-in, phone-verified Firebase user with no MARA role and no staff profile.
-// Valid server code → staff profile (role midwife, contactNumber = verified phone) + claims. Rate limited.
-export type JoinClinicRequest = JoinClinicInput;
-export interface JoinClinicResponse {
-  clinicId: string;
-  clinicName: string;
-}
-
-// getClinicJoinCode / rotateClinicJoinCode — auth: clinic_admin (own clinic; clinicId ignored) or super_admin (clinicId required).
-export interface ClinicJoinCodeRequest {
-  clinicId: string | null;
-}
-export interface ClinicJoinCodeResponse {
-  code: string;
-  createdAtMillis: number;
 }
 
 /** Error codes surfaced by callables via HttpsError.details.code for user-readable UI messages. */

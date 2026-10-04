@@ -64,20 +64,12 @@ export default function LoginPage() {
             Forgot password?
           </Link>
         </p>
-        <div className="mt-6 grid gap-3 border-t border-slate-200 pt-6">
-          <div>
-            <p className="font-semibold text-slate-900">Clinic staff</p>
-            <p className="text-sm text-slate-700">Sign in, or join your clinic for the first time with your mobile number and the clinic server code.</p>
-            <ButtonLink to="/join" variant="secondary" className="mt-2 w-full">
-              Join with your mobile number
-            </ButtonLink>
-          </div>
-          <div>
-            <p className="font-semibold text-slate-900">New clinic?</p>
-            <ButtonLink to="/signup" variant="secondary" className="mt-2 w-full">
-              Register your clinic
-            </ButtonLink>
-          </div>
+        <p className="mt-2 text-sm text-slate-700">Staff: use the email and password your clinic owner gave you.</p>
+        <div className="mt-6 border-t border-slate-200 pt-6">
+          <p className="font-semibold text-slate-900">New clinic?</p>
+          <ButtonLink to="/signup" variant="secondary" className="mt-2 w-full">
+            Register your clinic
+          </ButtonLink>
         </div>
         <p className="mt-6 text-sm text-slate-600">Designed to complement existing referral workflows.</p>
       </main>

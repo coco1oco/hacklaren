@@ -1,24 +1,29 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthProvider';
-import { PageHeader } from '@/components/ui';
-import { ClinicServerCodeCard } from '@/components/ClinicServerCode';
+import { useClinicData } from '@/data/ClinicDataProvider';
+import { Card, PageHeader } from '@/components/ui';
 
+// Admin is only reachable by the clinic owner (clinic_admin) and super admins (see StaffApp + Layout).
 export default function AdminHubPage() {
   const { claims } = useAuth();
+  const { clinic } = useClinicData();
   const isSuper = claims?.role === 'super_admin';
   const items = [
-    { to: '/admin/midwives', title: 'Staff accounts', desc: isSuper ? 'Create staff for any clinic, activate or deactivate accounts.' : 'Create midwife accounts for your clinic and activate or deactivate them.' },
+    { to: '/admin/midwives', title: 'Staff accounts', desc: isSuper ? 'Create staff for any clinic, activate or deactivate accounts.' : 'Create accounts for your midwives (email + password) and activate or deactivate them.' },
     { to: '/admin/clinics', title: isSuper ? 'Clinics' : 'Clinic details', desc: isSuper ? 'Add and edit clinics, including BHW / MHO alert numbers.' : 'Update your clinic contact details and BHW / MHO alert numbers.' },
     ...(isSuper ? [{ to: '/admin/hospitals', title: 'Hospitals', desc: 'Add and edit receiving hospitals. Hospitals are deactivated, never deleted.' }] : []),
     { to: '/admin/reports', title: 'Reports', desc: 'Referrals sent, acknowledged, declined, and patients arrived.' },
   ];
   return (
     <div>
-      <PageHeader title="Admin" subtitle={isSuper ? 'System administration' : 'Clinic administration'} />
-      {!isSuper && (
-        <div className="mb-4">
-          <ClinicServerCodeCard />
-        </div>
+      <PageHeader title="Admin" subtitle={isSuper ? 'System administration' : 'Clinic owner administration'} />
+      {!isSuper && claims?.clinicId && (
+        <Card title="Clinic code" className="mb-4">
+          <p className="rounded-lg bg-slate-100 px-4 py-2 font-mono text-2xl font-extrabold tracking-wider text-slate-950 inline-block">{claims.clinicId}</p>
+          <p className="mt-2 text-slate-800">
+            {clinic?.name ? `${clinic.name}. ` : ''}Your clinic's unique code, generated when the clinic was registered. Use it when contacting MARA support.
+          </p>
+        </Card>
       )}
       <ul className="grid gap-3 md:grid-cols-2">
         {items.map((i) => (

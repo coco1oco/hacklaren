@@ -11,8 +11,10 @@ export { getReferralView, updateReferralStatus } from './referrals/hospital';
 export { cancelReferral, revokeReferralLink, resendReferralLink, resendSms } from './referrals/manage';
 export { generateReferralPdf } from './pdf/generateReferralPdf';
 export { createStaffUser, setStaffActive } from './admin/staff';
-export { registerClinic, joinClinic, getClinicJoinCode, rotateClinicJoinCode } from './admin/onboarding';
+export { registerClinic } from './admin/onboarding';
 export { getReferralReport } from './admin/report';
+
+export { processReferralRequestCallable as processReferralRequest } from './referrals/triggers';
 
 // Firestore triggers
 export { onReferralCreated, onReferralRequestCreated } from './referrals/triggers';

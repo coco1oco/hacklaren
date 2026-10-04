@@ -146,13 +146,6 @@ async function main(): Promise<void> {
   for (const [id, h] of Object.entries(hospitals)) await db.collection(COLLECTIONS.hospitals).doc(id).set({ ...h, createdAt: now, updatedAt: now });
   for (const u of users) await upsertUser(u);
 
-  // Clinic server codes (demo only). Staff join a clinic with their verified mobile number + this code.
-  for (const [code, clinicId] of [['ROSA-2841', 'CLINIC-001'], ['LIGA-2026', 'CLINIC-002']] as const) {
-    const old = await db.collection(COLLECTIONS.clinicJoinCodes).where('clinicId', '==', clinicId).get();
-    for (const d of old.docs) if (d.id !== code) await d.ref.update({ active: false, revokedAt: now });
-    await db.collection(COLLECTIONS.clinicJoinCodes).doc(code).set({ clinicId, active: true, createdAt: now, createdBy: 'seed', revokedAt: null });
-  }
-
   const patient: PatientDoc = {
     patientId: PATIENT_ID,
     name: 'Maria Santos',
@@ -187,7 +180,7 @@ async function main(): Promise<void> {
     await patientRef.collection(COLLECTIONS.visits).doc(visitId).set(visit);
   }
 
-  console.log(`Seeded project ${PROJECT_ID}: 2 clinics (server codes ROSA-2841, LIGA-2026), 3 hospitals, ${users.length} users (password ${PASSWORD}), patient ${PATIENT_ID} (LMP ${lmp}, 30 weeks today) with ${visitPlan.length} visits.`);
+  console.log(`Seeded project ${PROJECT_ID}: 2 clinics, 3 hospitals, ${users.length} users (password ${PASSWORD}), patient ${PATIENT_ID} (LMP ${lmp}, 30 weeks today) with ${visitPlan.length} visits.`);
 }
 
 main().then(

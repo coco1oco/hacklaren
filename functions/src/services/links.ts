@@ -21,9 +21,11 @@ const EMULATOR_FALLBACK_URL = 'http://localhost:5173';
  * Pure: resolves the hospital-link base URL. Outside the emulator APP_BASE_URL is required and must be https
  * (never silently fall back to localhost in production). Throws a user-safe HttpsError on misconfiguration.
  */
-export function resolveAppBaseUrl(env: { APP_BASE_URL?: string; FUNCTIONS_EMULATOR?: string } = process.env): string {
+export function resolveAppBaseUrl(env: { APP_BASE_URL?: string; FUNCTIONS_EMULATOR?: string; VERCEL_PROJECT_PRODUCTION_URL?: string } = process.env): string {
   const emulator = env.FUNCTIONS_EMULATOR === 'true';
-  const raw = env.APP_BASE_URL?.trim();
+  // On Vercel, fall back to the project's production domain (always https) when APP_BASE_URL is not set.
+  const vercel = env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  const raw = env.APP_BASE_URL?.trim() || (vercel ? `https://${vercel.replace(/^https?:\/\//, '')}` : undefined);
   if (!raw) {
     if (emulator) {
       logger.warn(`APP_BASE_URL is not set; using ${EMULATOR_FALLBACK_URL} (emulator only)`);

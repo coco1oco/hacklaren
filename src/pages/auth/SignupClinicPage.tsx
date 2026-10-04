@@ -1,5 +1,5 @@
-// Clinic sign-up: creates the administrator's email/password account, then registerClinic (server) creates the
-// clinic, grants the clinic_admin role, and issues the clinic server code that staff use to join.
+// Clinic sign-up: creates the owner's email/password account, then registerClinic (server) creates the clinic and
+// makes the caller its owner (clinic_admin). The owner then creates staff accounts in Admin → Staff accounts.
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -11,7 +11,6 @@ import { hardLogout } from '@/lib/session';
 import { refreshClaims, useAuth } from '@/auth/AuthProvider';
 import { Alert, Button, Card, Loading, TextField } from '@/components/ui';
 import { AuthShell } from './AuthShell';
-import { ServerCodeDisplay } from '@/components/ClinicServerCode';
 
 type Errors = Partial<Record<string, string>>;
 
@@ -31,20 +30,19 @@ export default function SignupClinicPage() {
   const [errors, setErrors] = useState<Errors>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ clinicName: string; joinCode: string } | null>(null);
+  const [done, setDone] = useState<{ clinicName: string } | null>(null);
 
   if (status === 'loading') return <Loading label="Checking your session…" />;
   if (done) {
     return (
       <AuthShell title="Clinic registered">
         <Alert tone="success" className="mt-3" title={`${done.clinicName} is ready.`}>
-          You are the clinic administrator.
+          You are the clinic owner.
         </Alert>
-        <Card className="mt-4" title="Clinic server code">
-          <ServerCodeDisplay code={done.joinCode} />
-          <p className="mt-2 text-slate-800">
-            Give this code to your midwives. They open MARA, choose <strong>“Join with your mobile number”</strong>, verify their number, and enter this code.
-            You can see or change it later in Admin.
+        <Card className="mt-4" title="Next: add your staff">
+          <p className="text-slate-800">
+            Go to <strong>Admin → Staff accounts</strong> to create an account for each midwife. You set their email and password, and they sign in with
+            exactly those details.
           </p>
         </Card>
         <Button className="mt-4 w-full" onClick={() => navigate('/dashboard', { replace: true })}>
@@ -54,7 +52,6 @@ export default function SignupClinicPage() {
     );
   }
   if (status === 'signedIn' && !busy) return <Navigate to="/dashboard" replace />;
-  if (status === 'unassigned' && user?.phoneNumber && !busy) return <Navigate to="/join" replace />;
 
   // A signed-in email account without a clinic (e.g. an earlier attempt failed after the account was created).
   const accountExists = status === 'unassigned' && !!user?.email;
@@ -92,9 +89,9 @@ export default function SignupClinicPage() {
           return;
         }
       }
-      const res = await api.registerClinic(parsed.data);
+      await api.registerClinic(parsed.data);
       await refreshClaims();
-      setDone({ clinicName: parsed.data.clinic.name, joinCode: res.joinCode });
+      setDone({ clinicName: parsed.data.clinic.name });
     } catch (err) {
       setError(serverMessage(err, 'Unable to register the clinic. Please try again.'));
     } finally {
@@ -104,7 +101,7 @@ export default function SignupClinicPage() {
 
   return (
     <AuthShell title="Register your clinic">
-      <p className="mt-1 text-slate-700">Create your clinic and its administrator account. Your clinic gets a server code that your staff use to join.</p>
+      <p className="mt-1 text-slate-700">Create your clinic and its owner account. As the owner, you create the accounts for your staff.</p>
       <form onSubmit={submit} noValidate className="mt-4 space-y-4">
         <Card title="Clinic">
           <div className="space-y-4">
@@ -116,7 +113,7 @@ export default function SignupClinicPage() {
             <TextField label="Clinic phone number" type="tel" inputMode="tel" placeholder="e.g. 09171234567 or (044) 123-4567" {...field('clinic.contactNumber')} />
           </div>
         </Card>
-        <Card title="Administrator (you)">
+        <Card title="Clinic owner (you)">
           <div className="space-y-4">
             <TextField label="Your name" autoComplete="name" placeholder="e.g. Liza Cruz" {...field('adminName')} />
             <TextField label="Your mobile number" type="tel" inputMode="tel" placeholder="09XXXXXXXXX" {...field('adminContactNumber')} />

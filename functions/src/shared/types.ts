@@ -136,9 +136,6 @@ export const AUDIT_ACTIONS = [
   'staff_deactivated',
   'staff_reactivated',
   'clinic_registered',
-  'staff_joined',
-  'join_code_failed',
-  'join_code_rotated',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

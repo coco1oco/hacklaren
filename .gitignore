@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 dev-dist/
+server-dist/
 functions/lib/
 *.tsbuildinfo
 
@@ -24,6 +25,9 @@ service-account*.json
 
 # Local portable tooling (e.g. JDK for the Firebase emulators)
 .tools/
+
+# Local secrets (service-account keys etc.). NEVER commit.
+.secrets/
 
 # Test output
 playwright-report/
@@ -50,6 +54,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+# Public Firebase web config only (no secrets) — committed so Vercel builds pick it up.
+!.env.production
 functions/.env
 functions/.env.*
 !functions/.env.example

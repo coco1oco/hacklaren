@@ -1,0 +1,15 @@
+# Never upload secrets or local tooling to Vercel.
+.secrets/
+.tools/
+.env.local
+functions/.env
+functions/.secret.local
+functions/node_modules/
+functions/lib/
+node_modules/
+dist/
+server-dist/
+test-results/
+playwright-report/
+.emulator-data/
+*-debug.log

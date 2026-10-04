@@ -11,7 +11,7 @@ MARA is an information-transfer tool. It does not diagnose, does not replace cli
 | Layer | Technology |
 | --- | --- |
 | Frontend | React 19 + TypeScript + Vite 8 PWA, Tailwind 4, React Router, React Hook Form + Zod, Recharts — hosted on **Vercel** |
-| Backend | Firebase Auth, Cloud Firestore, Cloud Functions v2 (**asia-southeast1**), App Check |
+| Backend | Firebase Auth + Cloud Firestore (**asia-southeast1**, Spark plan) · server API on **Vercel Functions** (`/api`, region `sin1`) using the Firebase Admin SDK |
 | AI summary | `SummaryProvider` adapter — currently `mock` only (Amazon Q integration comes later) |
 | SMS | `SmsProvider` adapter — `mock` (default) or Semaphore, server-side only |
 | PDF | pdf-lib, generated server-side, returned as base64 (never a public URL) |
@@ -20,7 +20,9 @@ MARA is an information-transfer tool. It does not diagnose, does not replace cli
 
 ```text
 functions/src/shared/   Shared contracts + domain logic (frontend imports via @shared/*)
-functions/src/          Cloud Functions: referrals, hospital access, PDF, SMS, AI adapter, admin, cleanup
+functions/src/          Server logic: referrals, hospital access, PDF, SMS, AI adapter, admin, cleanup
+functions/src/http/     Host-agnostic HTTP entry (bundled to server-dist/ for Vercel)
+api/                    Vercel Functions: /api/call/<name>, /api/cron/cleanup
 src/                    React PWA (staff app + public /referral/:token hospital view)
 firestore.rules         Security rules (clinic isolation, RBAC, append-only audit)
 tests/rules, tests/e2e  Firestore rules tests (emulator) and Playwright E2E
@@ -36,11 +38,10 @@ Prerequisites: Node 22, Java 21+ (Firebase emulators).
 npm install
 npm --prefix functions install
 cp .env.example .env.local                 # VITE_USE_EMULATORS=true
-cp functions/.env.example functions/.env   # AI_PROVIDER=mock, SMS_PROVIDER=mock
-npm run build:functions
-npx firebase emulators:start --only auth,firestore,functions --project demo-mara   # terminal 1
-npx tsx scripts/seed.ts --emulator                                                 # once
-npm run dev                                                                        # terminal 2
+npx firebase emulators:start --only auth,firestore --project demo-mara   # terminal 1
+npm run dev:api                                                          # terminal 2 (same handlers as Vercel /api)
+npx tsx scripts/seed.ts --emulator                                       # once
+npm run dev                                                              # terminal 3 (proxies /api → dev:api)
 ```
 
 Demo logins (emulator only, password `Password123!`): `midwife@mara.test`, `admin@mara.test`, `super@mara.test`, `midwife2@mara.test` (second clinic). Demo patient: Maria Santos, `MARA-PAT-2841`.
@@ -55,22 +56,26 @@ Demo logins (emulator only, password `Password123!`): `midwife@mara.test`, `admi
 | `npm run test:rules` | Firestore rules tests (starts the Firestore emulator) |
 | `npm run test:e2e` | Playwright (needs emulators + seed running) |
 | `npm run build` | Production PWA build |
+| `npm run build:vercel` | PWA build + server bundle (`server-dist/`) — what Vercel runs |
 
-## Deployment
+## Deployment (Firebase Spark + Vercel)
 
-Use separate Firebase projects for development and production (`.firebaserc` aliases). Never point development at production patient data.
+Cloud Functions need the Blaze plan, so MARA's server code runs as Vercel Functions instead. Firebase only provides
+Auth + Firestore (both free on Spark). Live project: `silang-demo` (Firestore in `asia-southeast1`).
 
-Firebase (per project):
-1. Create the Firestore database in `asia-southeast1` (location cannot be changed later).
-2. Set `functions/.env.<projectId>`: `APP_BASE_URL=https://<your-vercel-domain>` (https required; links are built from it), `REFERRAL_LINK_TTL_HOURS` (24–72), `AI_PROVIDER`, `SMS_PROVIDER`, `ENFORCE_APP_CHECK`.
-3. If `SMS_PROVIDER=semaphore`: `npx firebase functions:secrets:set SEMAPHORE_API_KEY`.
-4. `npx firebase use production && npx firebase deploy --only firestore,functions,storage`.
-5. Add a TTL policy on `rateLimits.expiresAt`; register the Vercel domain for App Check (reCAPTCHA Enterprise) — see `docs/SECURITY.md`.
+Firebase (once):
+1. Firestore rules: `npx tsx scripts/deploy-firestore.ts` (uses `.secrets/firebase-service-account.json`).
+2. Composite indexes: deploy `firestore.indexes.json` with the Firebase CLI as a project Owner
+   (`npx firebase login`, then `npx firebase deploy --only firestore:indexes --project silang-demo`).
+3. First super admin: `npx tsx scripts/bootstrap-super-admin.ts <email> "<Name>" [password]`.
+4. Auth → Settings → Authorized domains: add your Vercel domain.
 
 Vercel:
-1. Import the repo; `vercel.json` sets the Vite build, SPA rewrites (including `/referral/:token`), and security headers.
-2. Set the `VITE_FIREBASE_*` web config, `VITE_FUNCTIONS_REGION=asia-southeast1`, optional `VITE_APPCHECK_SITE_KEY`. Do **not** set `VITE_USE_EMULATORS`.
-3. Add the Vercel domain to Firebase Auth → Authorized domains.
+1. Import the repo (framework: Vite). `vercel.json` sets the build (`npm run build:vercel`), `/api` functions in `sin1`,
+   a daily cleanup cron, SPA rewrites, and security headers. `.env.production` holds the public Firebase web config.
+2. Environment variables (Production), from `.secrets/vercel.env` (never commit): `FIREBASE_SERVICE_ACCOUNT_BASE64`,
+   `CRON_SECRET`, `AI_PROVIDER`, `SMS_PROVIDER`, `REFERRAL_LINK_TTL_HOURS`, `ENFORCE_APP_CHECK`. Optional `APP_BASE_URL`
+   (defaults to the Vercel production domain). Never set `VITE_USE_EMULATORS` in Vercel.
 
 ## Privacy
 

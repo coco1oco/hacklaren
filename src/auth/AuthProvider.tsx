@@ -22,8 +22,8 @@ function decodeCachedClaims(user: User): Record<string, unknown> | null {
 
 export interface AuthValue {
   /**
-   * 'unassigned' = signed in to Firebase but not yet a member of any clinic (new clinic sign-up in progress,
-   * or a verified mobile number that has not entered a clinic server code yet). No clinical access.
+   * 'unassigned' = signed in to Firebase but not yet a member of any clinic (a clinic registration that has not
+   * finished). No clinical access.
    */
   status: 'loading' | 'signedOut' | 'unassigned' | 'signedIn';
   user: User | null;
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (!role || (role !== 'super_admin' && !clinicId)) {
-          // Not a clinic member yet: route to clinic sign-up (email accounts) or server-code entry (mobile accounts).
+          // Not a clinic member yet: send them to finish clinic registration.
           setBase({ status: 'unassigned', user, claims: null });
           return;
         }
@@ -110,14 +110,17 @@ export function useAuth(): AuthValue {
   return useContext(AuthContext);
 }
 
-/** Forces an ID-token refresh so claims granted server-side (registerClinic / joinClinic) take effect now. */
+/** Forces an ID-token refresh so claims granted server-side (registerClinic) take effect now. */
 export async function refreshClaims(): Promise<void> {
   await auth.currentUser?.getIdToken(true);
 }
 
-/** Where a signed-in user without a clinic should go: mobile accounts enter a server code, email accounts register a clinic. */
-export function onboardingPath(user: User | null): string {
-  return user?.phoneNumber ? '/join' : '/signup';
+/**
+ * Where a signed-in user without a clinic should go. The only such case is a clinic owner whose registration did not
+ * finish (account created, clinic not yet); staff accounts are always created with a role by the clinic owner.
+ */
+export function onboardingPath(_user: User | null): string {
+  return '/signup';
 }
 
 /** Use inside clinic-only screens (guarded by RequireClinic), where ctx is guaranteed. */

@@ -19,9 +19,7 @@ describe('CALLABLES', () => {
       'setStaffActive',
       'getReferralReport',
       'registerClinic',
-      'joinClinic',
-      'getClinicJoinCode',
-      'rotateClinicJoinCode',
+      'processReferralRequest',
     ];
     expect(Object.keys(CALLABLES).sort()).toEqual([...required].sort());
   });

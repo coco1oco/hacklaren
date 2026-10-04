@@ -2,10 +2,8 @@
 import { callable } from './firebase';
 import {
   CALLABLES,
-  type ClinicJoinCodeRequest,
-  type ClinicJoinCodeResponse,
-  type JoinClinicRequest,
-  type JoinClinicResponse,
+  type ProcessReferralRequestRequest,
+  type ProcessReferralRequestResponse,
   type RegisterClinicRequest,
   type RegisterClinicResponse,
   type CancelReferralRequest,
@@ -51,7 +49,5 @@ export const api = {
   setStaffActive: callable<SetStaffActiveRequest, SetStaffActiveResponse>(CALLABLES.setStaffActive),
   getReferralReport: callable<GetReferralReportRequest, GetReferralReportResponse>(CALLABLES.getReferralReport),
   registerClinic: callable<RegisterClinicRequest, RegisterClinicResponse>(CALLABLES.registerClinic),
-  joinClinic: callable<JoinClinicRequest, JoinClinicResponse>(CALLABLES.joinClinic),
-  getClinicJoinCode: callable<ClinicJoinCodeRequest, ClinicJoinCodeResponse>(CALLABLES.getClinicJoinCode),
-  rotateClinicJoinCode: callable<ClinicJoinCodeRequest, ClinicJoinCodeResponse>(CALLABLES.rotateClinicJoinCode),
+  processReferralRequest: callable<ProcessReferralRequestRequest, ProcessReferralRequestResponse>(CALLABLES.processReferralRequest),
 };

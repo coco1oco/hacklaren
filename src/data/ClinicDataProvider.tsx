@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { api } from '@/lib/api';
 import { collection, collectionGroup, doc, query, where } from 'firebase/firestore';
 import { COLLECTIONS, type ClinicDoc, type PatientDoc, type ReferralDoc, type ReferralRequestDoc, type VisitDoc } from '@shared/contracts';
 import { db } from '@/lib/firebase';
@@ -108,6 +109,19 @@ export function ClinicDataProvider({ children }: { children: ReactNode }) {
   const outbox = useOutbox(uid);
 
   const clinicRequests = useMemo(() => requests.data.filter((r) => r.clinicId === clinicId), [requests.data, clinicId]);
+
+  // Once an offline emergency request has synced to the server (no pending writes) and is still queued, ask the API
+  // to turn it into a referral. Idempotent server-side; a daily cron sweep is the fallback if this never runs.
+  const online = useOnline();
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!online) return;
+    for (const r of clinicRequests) {
+      if (r.state !== 'queued' || r._pending || asked.current.has(r.id)) continue;
+      asked.current.add(r.id);
+      api.processReferralRequest({ requestId: r.id }).catch(() => asked.current.delete(r.id));
+    }
+  }, [clinicRequests, online]);
 
   // A queued request is done once a referral with the same clientRequestId exists (or the request says processed).
   const processedIds = useMemo(() => {

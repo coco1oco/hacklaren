@@ -7,10 +7,8 @@ export const WINDOW_MS = 60_000;
 /** Stricter bucket: invalid/unknown token attempts per IP per minute. */
 export const INVALID_TOKEN_LIMIT_PER_MINUTE = 10;
 
-export type RateLimitBucket = 'referral' | 'invalid_token' | 'join_code' | 'register_clinic';
+export type RateLimitBucket = 'referral' | 'invalid_token' | 'register_clinic';
 
-/** Wrong server-code attempts allowed per user per minute (brute-force protection for joinClinic). */
-export const JOIN_CODE_LIMIT_PER_MINUTE = 5;
 /** Clinic registrations allowed per IP per minute. */
 export const REGISTER_CLINIC_LIMIT_PER_MINUTE = 3;
 

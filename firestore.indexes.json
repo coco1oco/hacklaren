@@ -67,14 +67,6 @@
       ]
     },
     {
-      "collectionGroup": "clinicJoinCodes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "clinicId", "order": "ASCENDING" },
-        { "fieldPath": "active", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "referralTokens",
       "queryScope": "COLLECTION",
       "fields": [
