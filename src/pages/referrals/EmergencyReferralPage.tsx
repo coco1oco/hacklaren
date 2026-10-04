@@ -147,7 +147,7 @@ export default function EmergencyReferralPage() {
           {summaryState === 'failed' ? (
             <Alert tone="warning">AI summary unavailable. The referral remains available. The hospital can review the patient's raw chart.</Alert>
           ) : summaryState === 'ready' || summaryState === 'approved' ? (
-            <Alert tone="success">AI summary is ready. It is shown to the hospital labelled as generated after referral transmission.</Alert>
+            <Alert tone="success">Summary is ready. It is shown to the hospital labelled as not yet reviewed by the midwife.</Alert>
           ) : (
             <Alert tone="info">AI summary is being generated in the background. The referral has already been sent and does not wait for it.</Alert>
           )}

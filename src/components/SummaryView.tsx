@@ -4,8 +4,8 @@ import { Badge } from './ui';
 
 /** Label shown with a summary for clinic staff (hospital view gets its label from the server). */
 export function summaryLabel(type: ReferralType, state: SummaryState): string {
-  if (state === 'approved') return `${AI_LABELS.generated} · ${AI_LABELS.reviewed}`;
-  if (state === 'ready') return type === 'emergency' ? `${AI_LABELS.generated} · ${AI_LABELS.emergencyAfterSend}` : `${AI_LABELS.generated} · ${AI_LABELS.reviewRequired}`;
+  if (state === 'approved') return AI_LABELS.reviewed;
+  if (state === 'ready') return type === 'emergency' ? AI_LABELS.notReviewed : AI_LABELS.reviewRequired;
   if (state === 'pending' || state === 'generating') return 'AI summary is being generated in the background';
   if (state === 'failed') return 'AI summary unavailable. Review the raw chart manually.';
   return 'No AI summary';

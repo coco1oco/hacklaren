@@ -9,7 +9,7 @@ import { ageOnDate, manilaDateIso } from './time';
 const millis = (t: { toMillis(): number } | null | undefined): number | null => (t ? t.toMillis() : null);
 
 export function summaryLabel(type: ReferralDoc['type']): string {
-  return type === 'checkup' ? `${AI_LABELS.generated} · ${AI_LABELS.reviewed}` : `${AI_LABELS.generated} · ${AI_LABELS.emergencyAfterSend}`;
+  return type === 'checkup' ? AI_LABELS.reviewed : AI_LABELS.notReviewed;
 }
 
 /** Visit list for the hospital: clinical fields + author name + GA at the visit date, newest first. */

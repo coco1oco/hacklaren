@@ -57,9 +57,11 @@ describe('audit actions', () => {
 
 describe('AI_LABELS', () => {
   it('uses the agreed label wording', () => {
-    expect(AI_LABELS.generated).toBe('AI-GENERATED');
     expect(AI_LABELS.reviewed).toBe('MIDWIFE-REVIEWED');
-    expect(AI_LABELS.emergencyAfterSend).toBe('AI summary generated after referral transmission');
+    expect(AI_LABELS.notReviewed).toBe('NOT YET REVIEWED BY MIDWIFE');
+  });
+  it('does not claim AI generation (summaries are rule-based)', () => {
+    expect(Object.values(AI_LABELS).join(' ')).not.toMatch(/\bAI\b/);
   });
   it('disclaimer states it is not a diagnosis', () => {
     expect(AI_LABELS.disclaimer).toMatch(/Not a diagnosis/);

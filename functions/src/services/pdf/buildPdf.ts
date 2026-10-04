@@ -312,16 +312,15 @@ function drawCharts(L: Layout, visitsNewestFirst: HospitalVisitView[]): void {
 
 // ── summary block ───────────────────────────────────────────────────────────
 function drawSummary(L: Layout, view: HospitalReferralView): void {
-  L.heading('Q summary');
+  L.heading('Referral summary');
   const content: QSummaryContent | null = view.summary.content;
   if (!content) {
-    L.text('AI summary unavailable — raw chart below', { bold: true, color: ACCENT });
-    if (view.summary.state === 'pending' || view.summary.state === 'generating') L.text('The AI summary had not been generated when this PDF was created.', { color: MUTED, size: 8.5 });
+    L.text('Summary unavailable — raw chart below', { bold: true, color: ACCENT });
+    if (view.summary.state === 'pending' || view.summary.state === 'generating') L.text('The summary had not been prepared when this PDF was created.', { color: MUTED, size: 8.5 });
     return;
   }
-  const tags = view.referral.type === 'checkup' ? ['AI-generated', 'Midwife-reviewed'] : ['AI-generated', 'AI summary generated after referral transmission'];
-  L.text(tags.join('  |  '), { bold: true, color: ACCENT, size: 9 });
-  L.text('AI-generated summary of documented records. Not a diagnosis or treatment recommendation.', { color: MUTED, size: 8 });
+  L.text(view.referral.type === 'checkup' ? 'Midwife-reviewed' : 'Not yet reviewed by midwife', { bold: true, color: ACCENT, size: 9 });
+  L.text('Summary of documented records. Not a diagnosis or treatment recommendation.', { color: MUTED, size: 8 });
   L.space(3);
   L.text(content.summary);
   L.space(3);

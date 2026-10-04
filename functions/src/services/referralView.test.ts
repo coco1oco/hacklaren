@@ -138,8 +138,7 @@ describe('buildHospitalView', () => {
 
   it('checkup: shows the midwife-approved summary with the reviewed label', () => {
     expect(view.summary.content?.summary).toBe('EDITED-BY-MIDWIFE');
-    expect(view.summary.label).toContain(AI_LABELS.reviewed);
-    expect(view.summary.label).toContain(AI_LABELS.generated);
+    expect(view.summary.label).toBe(AI_LABELS.reviewed);
     expect(JSON.stringify(view)).not.toContain('RAW-AI-TEXT');
   });
 
@@ -147,7 +146,7 @@ describe('buildHospitalView', () => {
     const r = referral('emergency', 'SENT', summary({ state: 'ready', content: content('EMERGENCY-AI') }));
     const v = buildHospitalView(r, patient, visits, 9_000, NOW);
     expect(v.summary.content?.summary).toBe('EMERGENCY-AI');
-    expect(v.summary.label).toContain(AI_LABELS.emergencyAfterSend);
+    expect(v.summary.label).toBe(AI_LABELS.notReviewed);
     expect(v.summary.generatedAtMillis).toBe(500);
   });
 

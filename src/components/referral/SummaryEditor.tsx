@@ -10,7 +10,6 @@ export function SummaryEditor({ draft, onChange, disabled }: { draft: SummaryDra
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap gap-2">
-        <Badge tone="brand">{AI_LABELS.generated}</Badge>
         <Badge tone="warning">{AI_LABELS.reviewRequired}</Badge>
       </div>
       <p className="text-sm italic text-slate-700">{AI_LABELS.disclaimer}</p>

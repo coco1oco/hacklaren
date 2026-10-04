@@ -58,7 +58,6 @@ test.describe('checkup referral (full flow)', () => {
     await test.step('generate + review summary', async () => {
       const generate = page.getByRole('button', { name: /generate (ai )?summary/i });
       if (await generate.isVisible().catch(() => false)) await generate.click();
-      await expect(page.getByText(/AI-GENERATED/).first()).toBeVisible();
       await expect(page.getByText(/MIDWIFE REVIEW REQUIRED/i).first()).toBeVisible();
       const send = page.getByRole('button', { name: /send referral|^send$/i });
       await expect(send).toBeDisabled();

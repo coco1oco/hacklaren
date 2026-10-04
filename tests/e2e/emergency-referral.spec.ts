@@ -34,7 +34,7 @@ test.describe('emergency referral', () => {
             await hospital.reload();
             // Wait for the view to render (lazy chunk + callable) before counting, otherwise the poll races the load.
             await hospital.getByRole('heading', { name: 'Q Summary' }).waitFor({ timeout: 15_000 });
-            return hospital.getByText(/AI summary generated after referral transmission/i).count();
+            return hospital.getByText(/NOT YET REVIEWED BY MIDWIFE/i).count();
           },
           { timeout: 60_000, intervals: [2_000, 3_000, 5_000] },
         )

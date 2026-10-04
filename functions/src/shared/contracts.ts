@@ -389,7 +389,7 @@ export interface HospitalReferralView {
   summary: {
     state: SummaryState;
     content: QSummaryContent | null;
-    /** e.g. "AI-GENERATED · MIDWIFE-REVIEWED" or "AI-GENERATED · AI summary generated after referral transmission" */
+    /** e.g. "MIDWIFE-REVIEWED" (checkup) or "NOT YET REVIEWED BY MIDWIFE" (emergency) */
     label: string;
     generatedAtMillis: number | null;
   };
@@ -587,10 +587,14 @@ export interface SummaryProvider {
   generate(context: SummaryContext): Promise<QSummaryContent>;
 }
 
+/**
+ * Summary labels. Summaries are currently rule-based (MockSummaryProvider), so no label claims AI generation.
+ * Review status is still shown: the hospital must know whether a midwife checked the summary.
+ */
 export const AI_LABELS = {
-  generated: 'AI-GENERATED',
   reviewed: 'MIDWIFE-REVIEWED',
   reviewRequired: 'MIDWIFE REVIEW REQUIRED',
-  emergencyAfterSend: 'AI summary generated after referral transmission',
-  disclaimer: 'AI-generated summary of documented records. Not a diagnosis or treatment recommendation.',
+  /** Emergency referrals are sent first; their summary is never reviewed by the midwife before the hospital sees it. */
+  notReviewed: 'NOT YET REVIEWED BY MIDWIFE',
+  disclaimer: 'Summary of documented records. Not a diagnosis or treatment recommendation.',
 } as const;

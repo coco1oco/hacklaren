@@ -4,7 +4,7 @@ import { buildReferralPdf } from './buildPdf';
 import { AI_LABELS } from '../../shared/contracts';
 import type { HospitalReferralView, HospitalVisitView } from '../../shared/contracts';
 
-// Note: pdf-lib cannot extract text, so the watermark / "AI-GENERATED" label text is not asserted here.
+// Note: pdf-lib cannot extract text, so the watermark / summary label text is not asserted here.
 
 const visit = (i: number): HospitalVisitView => {
   const day = new Date(Date.UTC(2026, 0, 1) + i * 7 * 86_400_000).toISOString().slice(0, 10);
