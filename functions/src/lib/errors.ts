@@ -7,7 +7,7 @@ import type { MaraErrorCode } from '../shared/contracts';
 export const MESSAGES = {
   generic: 'Something went wrong. Your patient record has not been lost. Please check your connection and try again.',
   sendFailed: 'Unable to send referral. Your patient record has not been lost. Please check your connection and try again.',
-  aiUnavailable: 'AI summary unavailable. Review the raw chart manually. Retry summary.',
+  aiUnavailable: 'Q summary unavailable. Review the raw chart manually. Retry summary.',
   unauthenticated: 'Please sign in to continue.',
   forbidden: 'You do not have access to this record.',
   inactive: 'Your account is inactive. Contact your clinic administrator.',

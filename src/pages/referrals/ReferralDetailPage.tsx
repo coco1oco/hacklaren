@@ -178,15 +178,15 @@ export default function ReferralDetailPage() {
         <p className="mt-1 text-sm text-slate-700">Urgency: {r.urgency === 'emergency' ? 'Emergency' : 'Routine'}</p>
       </Card>
 
-      <Card title="AI summary">
+      <Card title="Q summary">
         <div aria-live="polite">
           {summaryContent ? (
             <SummaryContentView content={summaryContent} label={summaryLabel(r.type, s.state)} />
           ) : s.state === 'failed' ? (
             <p>
               {r.type === 'emergency'
-                ? "AI summary unavailable. The referral remains available. The hospital can review the patient's raw chart."
-                : 'AI summary unavailable. Review the raw chart manually. Retry summary.'}
+                ? "Q summary unavailable. The referral remains available. The hospital can review the patient's raw chart."
+                : 'Q summary unavailable. Review the raw chart manually. Retry summary.'}
             </p>
           ) : (
             <p>{summaryLabel(r.type, s.state)}</p>

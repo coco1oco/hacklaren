@@ -145,11 +145,11 @@ export default function EmergencyReferralPage() {
         )}
         <div aria-live="polite">
           {summaryState === 'failed' ? (
-            <Alert tone="warning">AI summary unavailable. The referral remains available. The hospital can review the patient's raw chart.</Alert>
+            <Alert tone="warning">Q summary unavailable. The referral remains available. The hospital can review the patient's raw chart.</Alert>
           ) : summaryState === 'ready' || summaryState === 'approved' ? (
             <Alert tone="success">Summary is ready. It is shown to the hospital labelled as not yet reviewed by the midwife.</Alert>
           ) : (
-            <Alert tone="info">AI summary is being generated in the background. The referral has already been sent and does not wait for it.</Alert>
+            <Alert tone="info">Q summary is being generated in the background. The referral has already been sent and does not wait for it.</Alert>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -306,7 +306,7 @@ export default function EmergencyReferralPage() {
       <Button type="submit" variant="danger" disabled={sending} className="min-h-16 w-full text-xl font-extrabold">
         {sending ? 'SENDING…' : 'SEND IMMEDIATELY'}
       </Button>
-      <p className="text-sm text-slate-800">The referral is sent right away. The AI summary is prepared afterwards and never delays sending.</p>
+      <p className="text-sm text-slate-800">The referral is sent right away. The Q summary is prepared afterwards and never delays sending.</p>
       {selected && <CallHospitalPanel hospitalName={selected.name} phone={selected.phone} />}
     </form>
   );

@@ -64,7 +64,7 @@ export const sendReferral = onCall<SendReferralRequest>(callableOptions({ sms: t
       const check = canTransition(r.type, r.status, 'SENT', 'midwife');
       if (!check.allowed) throw maraError('failed-precondition', 'INVALID_TRANSITION', check.reason ?? 'This referral cannot be sent.');
       if (r.summary.state !== 'ready' && r.summary.state !== 'approved') {
-        throw maraError('failed-precondition', 'SUMMARY_NOT_READY', 'Generate and review the AI summary before sending. If the AI summary is unavailable, retry the summary.');
+        throw maraError('failed-precondition', 'SUMMARY_NOT_READY', 'Generate and review the Q summary before sending. If the Q summary is unavailable, retry the summary.');
       }
       const nowMs = Date.now();
       const now = Timestamp.fromMillis(nowMs);

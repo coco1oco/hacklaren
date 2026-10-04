@@ -13,7 +13,7 @@ import { SummaryEditor } from '@/components/referral/SummaryEditor';
 import { draftErrors, fromDraft, toDraft, type SummaryDraft } from '@/components/referral/summaryDraft';
 import { usePatientReferralContext } from './_lib/usePatientContext';
 
-const AI_FAILED = 'AI summary unavailable. Review the raw chart manually. Retry summary.';
+const AI_FAILED = 'Q summary unavailable. Review the raw chart manually. Retry summary.';
 const CREATE_FAILED = 'Unable to create the referral. Your patient record has not been lost. Please check your connection and try again.';
 const SEND_FAILED = 'Unable to send referral. Your patient record has not been lost. Please check your connection and try again.';
 
@@ -190,7 +190,7 @@ export default function CheckupReferralPage() {
     );
   }
 
-  // ── Step 2: AI summary review ─────────────────────────────────────────────
+  // ── Step 2: Q summary review ─────────────────────────────────────────────
   const s = referral.summary;
   const serverContent = (s.state === 'ready' || s.state === 'approved') && s.content ? s.content : null;
   const content = generated ?? serverContent;
@@ -216,7 +216,7 @@ export default function CheckupReferralPage() {
 
   return (
     <div className="grid gap-4">
-      <PageHeader title="Review AI summary" subtitle={`${patient.name} → ${hospitalName}`} />
+      <PageHeader title="Review Q summary" subtitle={`${patient.name} → ${hospitalName}`} />
       <Card title="Status">
         <StatusStepper type="checkup" status="CREATED" history={['CREATED']} />
         <p className="mt-2 text-slate-900">
@@ -225,10 +225,10 @@ export default function CheckupReferralPage() {
       </Card>
 
       <div aria-live="polite">
-        {generating && <Alert tone="info">Generating AI summary… This usually takes a few seconds.</Alert>}
+        {generating && <Alert tone="info">Generating Q summary… This usually takes a few seconds.</Alert>}
         {failed && (
           <Alert tone="warning" title={AI_FAILED}>
-            <p>The referral cannot be sent with a reviewed AI summary until the summary is available.</p>
+            <p>The referral cannot be sent with a reviewed Q summary until the summary is available.</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Button onClick={() => generate(referral.referralId)} disabled={busy !== null}>
                 Retry summary
@@ -243,12 +243,12 @@ export default function CheckupReferralPage() {
 
       {!content && !generating && !failed && (
         <Button onClick={() => generate(referral.referralId)} disabled={busy !== null}>
-          Generate AI summary
+          Generate Q summary
         </Button>
       )}
 
       {effectiveDraft && (
-        <Card title="AI summary (edit before sending)">
+        <Card title="Q summary (edit before sending)">
           <SummaryEditor draft={effectiveDraft} onChange={setDraft} disabled={busy === 'send'} />
           <CheckboxField className="mt-4" label="I have reviewed this summary" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />
         </Card>

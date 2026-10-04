@@ -6,9 +6,9 @@ import { Badge } from './ui';
 export function summaryLabel(type: ReferralType, state: SummaryState): string {
   if (state === 'approved') return AI_LABELS.reviewed;
   if (state === 'ready') return type === 'emergency' ? AI_LABELS.notReviewed : AI_LABELS.reviewRequired;
-  if (state === 'pending' || state === 'generating') return 'AI summary is being generated in the background';
-  if (state === 'failed') return 'AI summary unavailable. Review the raw chart manually.';
-  return 'No AI summary';
+  if (state === 'pending' || state === 'generating') return 'Q summary is being generated in the background';
+  if (state === 'failed') return 'Q summary unavailable. Review the raw chart manually.';
+  return 'No Q summary';
 }
 
 function List({ title, items }: { title: string; items: string[] }) {

@@ -50,7 +50,7 @@ export default function HelpPage() {
               On the patient profile tap the red <strong>EMERGENCY REFERRAL</strong> button.
             </>,
             'Choose the hospital and the reason. The referral is sent immediately and you get a hospital link right away.',
-            'Call the hospital. The AI summary is prepared in the background and never delays the referral.',
+            'Call the hospital. The Q summary is prepared in the background and never delays the referral.',
             'If you are offline, the referral is queued on the phone and sent automatically when the connection returns. Call the hospital in the meantime.',
           ]}
         />
@@ -62,7 +62,7 @@ export default function HelpPage() {
             <>
               On the patient profile tap <strong>Checkup Referral</strong>, choose the hospital and write the reason.
             </>,
-            'MARA prepares an AI summary of the documented records. Read it carefully and edit anything that is not accurate.',
+            'MARA prepares an Q summary of the documented records. Read it carefully and edit anything that is not accurate.',
             'Send the referral after your review. The hospital sees that the summary was reviewed by a midwife.',
             'If the summary is unavailable, review the raw chart manually and tap Retry summary.',
             'Checkup referrals need the patient’s consent to share her record.',
