@@ -8,7 +8,7 @@ import { STATUS_LABELS } from '@shared/referralStatus';
 import { DANGER_SIGN_LABELS, type DangerSigns } from '@shared/types';
 import { api } from '@/lib/api';
 import { userMessage } from '@/lib/errors';
-import { formatDate, formatDateTime, URINE_LABELS } from '@/lib/format';
+import { describeGravidaPara, formatDate, formatDateTime, URINE_LABELS } from '@/lib/format';
 import { Alert, Badge, Button, TextAreaField, TextField } from '@/components/ui';
 import { LinkExpiry } from '@/components/Countdown';
 import { StatusStepper } from '@/components/StatusStepper';
@@ -313,6 +313,7 @@ export default function HospitalReferralPage() {
           </Field>
           <Field label="Gravida / Para">
             G{v.patient.pregnancy.gravida} P{v.patient.pregnancy.para}
+            <span className="block text-sm font-normal text-slate-700">{describeGravidaPara(v.patient.pregnancy.gravida, v.patient.pregnancy.para)}</span>
           </Field>
           <Field label="Blood type">{v.patient.bloodType}</Field>
         </dl>

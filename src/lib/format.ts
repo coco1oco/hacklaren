@@ -46,3 +46,13 @@ export const URINE_LABELS: Record<string, string> = {
   '3+': '3+',
   '4+': '4+',
 };
+
+/**
+ * Gravida/para in plain words, e.g. G3 P2 → "3 pregnancies (incl. current) · 2 births at 20+ weeks".
+ * Gravida = every pregnancy however it ended (twins = 1). Para = pregnancies that reached 20+ weeks (twins = 1).
+ */
+export function describeGravidaPara(gravida: number | null | undefined, para: number | null | undefined): string {
+  const g = gravida ?? 0;
+  const p = para ?? 0;
+  return `${g} ${g === 1 ? 'pregnancy' : 'pregnancies'} (incl. current) · ${p} ${p === 1 ? 'birth' : 'births'} at 20+ weeks`;
+}

@@ -365,7 +365,11 @@ function patientRows(p: HospitalReferralView['patient']): [string, string][] {
     ['Trimester', p.trimester],
     ['EDD', p.pregnancy.edd],
     ['LMP', p.pregnancy.lmp],
-    ['Gravida / Para', `G${p.pregnancy.gravida} P${p.pregnancy.para}`],
+    [
+      'Gravida / Para',
+      // Plain words so it reads at a glance: gravida = all pregnancies (twins = 1); para = births at 20+ weeks.
+      `G${p.pregnancy.gravida} P${p.pregnancy.para} (${p.pregnancy.gravida} ${p.pregnancy.gravida === 1 ? 'pregnancy' : 'pregnancies'} incl. current, ${p.pregnancy.para} ${p.pregnancy.para === 1 ? 'birth' : 'births'} at 20+ weeks)`,
+    ],
     ['Blood type', p.bloodType],
     ['Allergies', p.allergies.length ? p.allergies.join(', ') : 'None documented'],
     ['Medical history', p.medicalHistory.join(', ')],

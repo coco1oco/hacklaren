@@ -127,8 +127,28 @@ export function PatientForm({ initial, checkDuplicates, excludeId, submitLabel, 
               </Button>
             )}
           </div>
-          <TextField label="Gravida (G)" type="number" inputMode="numeric" min={1} max={20} placeholder="e.g. 3" {...register('pregnancy.gravida', { valueAsNumber: true })} error={errors.pregnancy?.gravida?.message} />
-          <TextField label="Para (P)" type="number" inputMode="numeric" min={0} max={20} placeholder="e.g. 2" {...register('pregnancy.para', { valueAsNumber: true })} error={errors.pregnancy?.para?.message} />
+          <TextField
+            label="Gravida (G): total pregnancies"
+            hint="Every pregnancy, however it ended: this one, miscarriages, ectopic pregnancies and births. Twins or triplets count as 1."
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={20}
+            placeholder="e.g. 3"
+            {...register('pregnancy.gravida', { valueAsNumber: true })}
+            error={errors.pregnancy?.gravida?.message}
+          />
+          <TextField
+            label="Para (P): births at 20+ weeks"
+            hint="Past pregnancies that reached 20 weeks or more (live birth or stillbirth). Losses before 20 weeks are not counted. Twins or triplets count as 1."
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={20}
+            placeholder="e.g. 2"
+            {...register('pregnancy.para', { valueAsNumber: true })}
+            error={errors.pregnancy?.para?.message}
+          />
         </div>
         <p aria-live="polite" className="mt-3 rounded-lg bg-slate-100 p-3 font-semibold">
           Gestational age today: {status.gaLabel} · {status.trimesterLabel}

@@ -10,7 +10,7 @@ import { api } from '@/lib/api';
 import { logAudit } from '@/lib/audit';
 import { downloadBase64Pdf } from '@/lib/download';
 import { userMessage } from '@/lib/errors';
-import { formatDate, formatDateTime, millis, URINE_LABELS } from '@/lib/format';
+import { describeGravidaPara, formatDate, formatDateTime, millis, URINE_LABELS } from '@/lib/format';
 import { pregnancyStatus } from '@/lib/pregnancyView';
 import { useOnline } from '@/lib/useOnline';
 import { Alert, Badge, Button, ButtonLink, Card, Loading, PageHeader } from '@/components/ui';
@@ -216,6 +216,7 @@ export default function PatientProfilePage() {
             <Field label="EDD">{formatDate(patient.pregnancy?.edd)}</Field>
             <Field label="Gravida / Para">
               G{patient.pregnancy?.gravida} P{patient.pregnancy?.para}
+              <span className="block text-sm font-normal text-slate-700">{describeGravidaPara(patient.pregnancy?.gravida, patient.pregnancy?.para)}</span>
             </Field>
             <Field label="Gestational age">{status.gaLabel}</Field>
             <Field label="Trimester">{status.trimesterLabel}</Field>

@@ -3,7 +3,7 @@ import type { PatientDoc } from '@shared/contracts';
 import type { ReferralType, VisitClinical } from '@shared/types';
 import { ageInYears, formatGestationalAge, gestationalAge, trimester, trimesterLabel } from '@shared/pregnancy';
 import { currentMedications, sortVisitsAsc } from '@shared/riskFlags';
-import { formatDate, formatDateTime, URINE_LABELS } from '@/lib/format';
+import { describeGravidaPara, formatDate, formatDateTime, URINE_LABELS } from '@/lib/format';
 
 export interface SlipData {
   /** null while the emergency request is still queued offline. */
@@ -88,8 +88,8 @@ export function ReferralSlip({ data }: { data: SlipData }) {
                 {formatGestationalAge(ga)} ({trimesterLabel(trimester(ga))})
               </Row>
               <Row label="EDD">{formatDate(p.pregnancy.edd)}</Row>
-              <Row label="G / P">
-                G{p.pregnancy.gravida} P{p.pregnancy.para}
+              <Row label="Gravida / Para">
+                G{p.pregnancy.gravida} P{p.pregnancy.para} ({describeGravidaPara(p.pregnancy.gravida, p.pregnancy.para)})
               </Row>
               <Row label="Blood type">{p.bloodType}</Row>
               <Row label="Allergies">{p.allergies.length ? p.allergies.join(', ') : 'None recorded'}</Row>
