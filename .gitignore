@@ -1,36 +1,59 @@
 # Dependencies
 node_modules/
 
-# Expo
-.expo/
+# Build output
 dist/
-web-build/
-expo-env.d.ts
+dev-dist/
+functions/lib/
+*.tsbuildinfo
 
-# Native
-*.orig.*
+# Firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+database-debug.log*
+pubsub-debug.log*
+.emulator-data/
+.runtimeconfig.json
+service-account*.json
+*-service-account.json
+
+# Vercel
+.vercel/
+
+# Local portable tooling (e.g. JDK for the Firebase emulators)
+.tools/
+
+# Test output
+playwright-report/
+test-results/
+coverage/
+
+# Keys / secrets
 *.jks
 *.p8
 *.p12
 *.key
-*.mobileprovision
-ios/
-android/
-
-# Metro
-.metro-health-check*
+*.pem
 
 # Debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
+# OS
 .DS_Store
+Thumbs.db
 
-# Environment
-.env*.local
+# Environment (never commit secrets)
 .env
+.env.*
+!.env.example
+functions/.env
+functions/.env.*
+!functions/.env.example
+functions/.secret.local
 
 # Editor
 .vscode/

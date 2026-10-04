@@ -1,165 +1,77 @@
-# Silang
+# MARA — Maternal Referral and Admission
 
-A digital maternal record and referral transfer system for Philippine lying-in clinics and receiving hospitals.
+> The patient moves. Her record moves with her.
 
-## Overview
+MARA is a maternal referral and patient-record continuity system for participating lying-in clinics and receiving hospitals. Midwives keep prenatal records, record visits (offline too), and send emergency or checkup referrals. Hospitals open a secure, time-limited link (no account needed), acknowledge, decline, or record arrival, and the clinic sees the status in real time.
 
-Small, community-level lying-in clinics often keep maternal and prenatal information on paper. When a patient is referred to a hospital, the referral usually communicates the immediate reason but not the patient's longitudinal prenatal history, leaving the receiving clinician to reconstruct it from incomplete information.
+MARA is an information-transfer tool. It does not diagnose, does not replace clinician judgment, emergency transport, hospital EMRs, or official DOH referral procedures, and it is designed to complement existing referral workflows. It is not DOH- or NPC-certified.
 
-Silang makes the documented maternal record transferable as a structured digital referral.
+## Stack
 
-> **Record once at the referring clinic, transfer the documented history securely, and help the receiving clinician understand it quickly.**
+| Layer | Technology |
+| --- | --- |
+| Frontend | React 19 + TypeScript + Vite 8 PWA, Tailwind 4, React Router, React Hook Form + Zod, Recharts — hosted on **Vercel** |
+| Backend | Firebase Auth, Cloud Firestore, Cloud Functions v2 (**asia-southeast1**), App Check |
+| AI summary | `SummaryProvider` adapter — currently `mock` only (Amazon Q integration comes later) |
+| SMS | `SmsProvider` adapter — `mock` (default) or Semaphore, server-side only |
+| PDF | pdf-lib, generated server-side, returned as base64 (never a public URL) |
 
-Silang is an information-transfer and record-management system. It is **not a diagnostic or clinical decision-making system** — the clinician remains responsible for clinical assessment and decisions.
-
-## Tech Stack
-
-| Layer                  | Technology                                        |
-| ---------------------- | ------------------------------------------------- |
-| Frontend               | Expo React / React Native                         |
-| Database               | Firebase (Firestore / Auth / Storage)             |
-| Backend                | Silang backend/API layer (maintained by backend team) |
-| AI / Orchestration     | Amazon Quick                                      |
-| SMS                    | AWS SNS or the team's existing SMS implementation |
-| Dev Environment        | Kiro                                              |
-
-## Architecture
+## Layout
 
 ```text
-Frontend (Expo React)
-      │
-      ▼
-Silang Backend / API  ──►  Firebase
-
-
-AI / Orchestration (Amazon Quick)
-      │
-      ▼
-Silang Backend / API  ──►  Firebase
-
-
-Notifications
-Silang Backend  ──►  AWS SNS / existing SMS service
+functions/src/shared/   Shared contracts + domain logic (frontend imports via @shared/*)
+functions/src/          Cloud Functions: referrals, hospital access, PDF, SMS, AI adapter, admin, cleanup
+src/                    React PWA (staff app + public /referral/:token hospital view)
+firestore.rules         Security rules (clinic isolation, RBAC, append-only audit)
+tests/rules, tests/e2e  Firestore rules tests (emulator) and Playwright E2E
+scripts/seed.ts         Emulator-only demo data
+docs/                   SECURITY.md, DATA_RETENTION.md
 ```
 
-### Key architectural rules
+## Local development
 
-- **Do not replace Firebase.** Firebase is the project's database.
-- **Amazon Quick is the AI/workflow layer, not the database.** It summarizes documented information only.
-- **Amazon Quick must not connect directly to Firebase.** Use `Amazon Quick → Silang REST API → Firebase`, never Firebase credentials directly.
-- **The frontend is not responsible for security.** Authorization and sensitive data access are enforced by the backend. A referral ID alone is not sufficient authorization for sensitive production data.
-
-## Prerequisites
-
-- [Node.js](https://nodejs.org/) (LTS version recommended)
-- npm or yarn
-- [Expo CLI](https://docs.expo.dev/more/expo-cli/) (bundled via `npx expo`)
-- For device testing: the [Expo Go](https://expo.dev/go) app, or an iOS Simulator / Android Emulator
-
-## Getting Started
-
-Install dependencies:
+Prerequisites: Node 22, Java 21+ (Firebase emulators).
 
 ```bash
 npm install
+npm --prefix functions install
+cp .env.example .env.local                 # VITE_USE_EMULATORS=true
+cp functions/.env.example functions/.env   # AI_PROVIDER=mock, SMS_PROVIDER=mock
+npm run build:functions
+npx firebase emulators:start --only auth,firestore,functions --project demo-mara   # terminal 1
+npx tsx scripts/seed.ts --emulator                                                 # once
+npm run dev                                                                        # terminal 2
 ```
 
-Start the development server:
+Demo logins (emulator only, password `Password123!`): `midwife@mara.test`, `admin@mara.test`, `super@mara.test`, `midwife2@mara.test` (second clinic). Demo patient: Maria Santos, `MARA-PAT-2841`.
 
-```bash
-npx expo start
-```
+## Checks
 
-From the Expo CLI you can then:
+| Command | What it runs |
+| --- | --- |
+| `npm run typecheck` | App, test, and functions TypeScript |
+| `npm run lint` | ESLint |
+| `npm test` | Vitest unit tests |
+| `npm run test:rules` | Firestore rules tests (starts the Firestore emulator) |
+| `npm run test:e2e` | Playwright (needs emulators + seed running) |
+| `npm run build` | Production PWA build |
 
-- Press `a` to open on an Android emulator
-- Press `i` to open on an iOS simulator
-- Press `w` to open in a web browser
-- Scan the QR code with Expo Go on a physical device
+## Deployment
 
-## Project Scope
+Use separate Firebase projects for development and production (`.firebaserc` aliases). Never point development at production patient data.
 
-The project is divided into implementation phases. The hackathon MVP covers Phases 1–6; Phase 7 is optional.
+Firebase (per project):
+1. Create the Firestore database in `asia-southeast1` (location cannot be changed later).
+2. Set `functions/.env.<projectId>`: `APP_BASE_URL=https://<your-vercel-domain>` (https required; links are built from it), `REFERRAL_LINK_TTL_HOURS` (24–72), `AI_PROVIDER`, `SMS_PROVIDER`, `ENFORCE_APP_CHECK`.
+3. If `SMS_PROVIDER=semaphore`: `npx firebase functions:secrets:set SEMAPHORE_API_KEY`.
+4. `npx firebase use production && npx firebase deploy --only firestore,functions,storage`.
+5. Add a TTL policy on `rateLimits.expiresAt`; register the Vercel domain for App Check (reCAPTCHA Enterprise) — see `docs/SECURITY.md`.
 
-| Phase | Name                      | Description                                                       |
-| ----- | ------------------------- | ----------------------------------------------------------------- |
-| 1     | Core Maternal Record      | Digital maternal record (patient, pregnancy, prenatal visits)     |
-| 2     | Referral Creation         | Create a referral from an existing maternal record                |
-| 3     | Referral Data Package     | Controlled, referral-specific representation of patient data      |
-| 4     | Hospital Referral Access  | Receiving-facility view of the referral                           |
-| 5     | Amazon Quick AI Summary   | Constrained, non-diagnostic clinician-facing summary              |
-| 6     | Family SMS                | Minimal referral notification to the family                       |
-| 7     | Referral Status Tracking  | `CREATED → SENT → RECEIVED → IN REVIEW → COMPLETED` (optional)     |
+Vercel:
+1. Import the repo; `vercel.json` sets the Vite build, SPA rewrites (including `/referral/:token`), and security headers.
+2. Set the `VITE_FIREBASE_*` web config, `VITE_FUNCTIONS_REGION=asia-southeast1`, optional `VITE_APPCHECK_SITE_KEY`. Do **not** set `VITE_USE_EMULATORS`.
+3. Add the Vercel domain to Firebase Auth → Authorized domains.
 
-Future roadmap (not required for MVP): hospital outcome feedback, offline-first sync, and broader health-system integration (LGU/MHO, DOH, PhilHealth).
+## Privacy
 
-### MVP end-to-end flow
-
-```text
-Midwife records prenatal information
-  → creates a referral
-  → receiving hospital opens the referral
-  → Amazon Quick retrieves the documented history
-  → generates a concise non-diagnostic summary
-  → saves it
-  → hospital sees the summary
-  → family receives an SMS
-```
-
-## AI Safety Constraints
-
-The Amazon Quick AI summary must use **only information explicitly present in the retrieved Silang record**. It must **not** diagnose, infer diseases/complications/risk, recommend treatment or medication, predict outcomes, invent or estimate missing values, alter the original record, or access another patient's data.
-
-- Missing fields are rendered as `Not documented`.
-- The exact documented referral reason must be preserved.
-- Every summary must state that it is an AI-generated summary of documented records and is not a diagnosis or treatment recommendation.
-
-## Security Requirements
-
-- Authentication, authorization, and referral-specific access enforced server-side
-- HTTPS and server-side validation
-- No cross-patient access; read-only hospital access where appropriate
-- Minimal information in SMS
-- **No secrets in frontend code and none committed to Git** (Firebase service-account JSON, private keys, database credentials, production secrets, private API keys)
-- Audit timestamps for referral events
-
-## Project Structure
-
-```text
-Silang/
-├── app/              # Application screens and routes (expo-router)
-├── assets/           # Images, fonts, and other static assets
-├── components/       # Reusable UI components
-├── constants/        # App-wide constants and theme values
-├── hooks/            # Custom React hooks
-├── app.json          # Expo app configuration
-├── package.json      # Dependencies and scripts
-└── tsconfig.json     # TypeScript configuration
-```
-
-## Available Scripts
-
-| Script            | Description                          |
-| ----------------- | ------------------------------------ |
-| `npm start`       | Start the Expo development server    |
-| `npm run android` | Start and open on Android            |
-| `npm run ios`     | Start and open on iOS                |
-| `npm run web`     | Start and open in the browser        |
-| `npm run lint`    | Run the linter                       |
-
-## Demo Data
-
-Use **synthetic data only**. Do not use real patient information in the hackathon demo.
-
-- Suggested demo identifier: `REF-DEMO-001`
-- Suggested demo patient: `Maria Santos`
-
-## Documentation
-
-- [Handoff / Project Spec](./HANDOFF.md)
-- [Contributing Guide](./CONTRIBUTING.md)
-- [Changelog](./CHANGELOG.md)
-
-## License
-
-See [LICENSE](./LICENSE).
+Built with RA 10173 (Data Privacy Act of 2012) in mind: clinic-scoped access, consent capture, audit logs, data minimisation (SMS and AI), hashed expiring revocable links. Organisational requirements (DPO, NPC registration where applicable, data-sharing agreements) are outside the code. See `docs/SECURITY.md` and `docs/DATA_RETENTION.md`. Use synthetic data only for demos.

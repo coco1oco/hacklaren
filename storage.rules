@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// MARA Cloud Storage rules.
+//
+// Policy: no client reads or writes at all.
+//  - Referral PDFs are generated on demand by the generateReferralPdf callable and returned as base64;
+//    they are never persisted at a public or client-readable URL.
+//  - Any future server-side Storage usage goes through the Admin SDK, which bypasses these rules.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // ── Template for FUTURE clinic-scoped attachments (NOT enabled) ──────────────────────────
+    // Enable only after a security review, and mirror the clinic-isolation model of firestore.rules.
+    // Storage rules cannot read Firestore cheaply at scale, so rely on the { role, clinicId } claims.
+    //
+    // match /clinics/{clinicId}/patients/{patientId}/attachments/{fileName} {
+    //   function isClinicStaff() {
+    //     return request.auth != null
+    //       && request.auth.token.role in ['midwife', 'clinic_admin']
+    //       && request.auth.token.clinicId == clinicId;
+    //   }
+    //   allow read: if isClinicStaff();
+    //   allow create: if isClinicStaff()
+    //     && request.resource.size < 10 * 1024 * 1024
+    //     && request.resource.contentType.matches('image/(jpeg|png)|application/pdf');
+    //   allow update, delete: if false;
+    // }
+  }
+}

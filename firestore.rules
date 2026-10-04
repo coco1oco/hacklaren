@@ -1,0 +1,482 @@
+rules_version = '2';
+
+// MARA Firestore security rules.
+//
+// Principles:
+//  - Deny by default. Every collection is listed explicitly; anything else falls through to deny.
+//  - Authorization comes ONLY from custom claims { role, clinicId } set by Cloud Functions.
+//  - Clinic isolation: midwives / clinic admins only see their own clinic's records.
+//  - super_admin manages system configuration (clinics, hospitals, staff) and does NOT read patient charts,
+//    referrals, or SMS logs (aggregate counts come from the getReferralReport callable).
+//  - Client writes to clinical collections require an active midwives/{uid} profile (isActiveStaff()).
+//  - Referrals, referral tokens, SMS logs, staff docs, and rate limits are written by Cloud Functions only.
+//  - Client-written clinical docs carry server-verified metadata (uid, request.time, version + 1).
+//
+// See docs/SECURITY.md for the threat model and RBAC matrix.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────────────────────────── Identity helpers ─────────────────────────────
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function role() {
+      return signedIn() && ('role' in request.auth.token) ? request.auth.token.role : null;
+    }
+
+    function clinicId() {
+      return signedIn() && ('clinicId' in request.auth.token) ? request.auth.token.clinicId : null;
+    }
+
+    function isStaff() {
+      return role() in ['midwife', 'clinic_admin', 'super_admin'];
+    }
+
+    function isSuper() {
+      return role() == 'super_admin';
+    }
+
+    // midwife or clinic_admin whose clinic claim matches cid.
+    function isClinicStaff(cid) {
+      return role() in ['midwife', 'clinic_admin'] && clinicId() is string && clinicId() == cid;
+    }
+
+    function isClinicAdmin(cid) {
+      return role() == 'clinic_admin' && clinicId() is string && clinicId() == cid;
+    }
+
+    function staffPath() {
+      return /databases/$(database)/documents/midwives/$(uid());
+    }
+
+    // The caller's staff profile exists and is active. Closes the window between
+    // setStaffActive(false) and ID-token expiry for WRITES. Reads deliberately skip this
+    // check to limit get() cost (see docs/SECURITY.md §3 residual read window).
+    function isActiveStaff() {
+      return signedIn() && exists(staffPath()) && get(staffPath()).data.active == true;
+    }
+
+    // ───────────────────────────── Value helpers ─────────────────────────────
+
+    function str(v, minLen, maxLen) {
+      return v is string && v.size() >= minLen && v.size() <= maxLen;
+    }
+
+    function optStr(v, maxLen) {
+      return v == null || (v is string && v.size() <= maxLen);
+    }
+
+    function isoDate(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function strList(v, maxItems) {
+      return v is list && v.size() <= maxItems;
+    }
+
+    function numIn(v, lo, hi) {
+      return v is number && v >= lo && v <= hi;
+    }
+
+    // Optional numeric field: absent, null, or within range.
+    function optNumIn(d, key, lo, hi) {
+      return !(key in d) || d[key] == null || numIn(d[key], lo, hi);
+    }
+
+    // Fields that did not change between the stored doc and the incoming write.
+    function unchanged(keys) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys);
+    }
+
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function patientPath(pid) {
+      return /databases/$(database)/documents/patients/$(pid);
+    }
+
+    // ───────────────────────────── clinics ─────────────────────────────
+
+    function clinicKeys() {
+      return ['name', 'address', 'barangay', 'city', 'province', 'contactNumber', 'latitude', 'longitude',
+              'bhwContactNumber', 'mhoContactNumber', 'active', 'createdAt', 'updatedAt'];
+    }
+
+    function clinicAdminEditableKeys() {
+      return ['name', 'address', 'barangay', 'city', 'province', 'contactNumber', 'bhwContactNumber',
+              'mhoContactNumber', 'latitude', 'longitude', 'updatedAt'];
+    }
+
+    function validClinic(d) {
+      return d.keys().hasAll(clinicKeys()) && d.keys().hasOnly(clinicKeys())
+        && str(d.name, 1, 160)
+        && str(d.address, 0, 300)
+        && str(d.barangay, 0, 120)
+        && str(d.city, 0, 120)
+        && str(d.province, 0, 120)
+        && str(d.contactNumber, 0, 20)
+        && (d.latitude == null || numIn(d.latitude, -90, 90))
+        && (d.longitude == null || numIn(d.longitude, -180, 180))
+        && optStr(d.bhwContactNumber, 20)
+        && optStr(d.mhoContactNumber, 20)
+        && d.active is bool
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    match /clinics/{cid} {
+      allow read: if isClinicStaff(cid) || isSuper();
+      allow create: if isSuper()
+        && validClinic(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if validClinic(request.resource.data)
+        && request.resource.data.updatedAt == request.time
+        && unchanged(['createdAt'])
+        && (isSuper() || (isClinicAdmin(cid) && changedOnly(clinicAdminEditableKeys())));
+      // Never delete clinics; deactivate with active = false.
+      allow delete: if false;
+    }
+
+    // ───────────────────────────── midwives (staff profiles) ─────────────────────────────
+
+    match /midwives/{staffUid} {
+      allow read: if (signedIn() && uid() == staffUid)
+        || isClinicStaff(resource.data.clinicId)
+        || isSuper();
+      // Written by Cloud Functions (createStaffUser / setStaffActive) only.
+      allow write: if false;
+    }
+
+    // ───────────────────────────── patients ─────────────────────────────
+
+    function patientKeys() {
+      return ['patientId', 'name', 'nameLower', 'birthdate', 'address', 'barangay', 'contactNumber',
+              'emergencyContact', 'pregnancy', 'allergies', 'bloodType', 'medicalHistory', 'obstetricHistory',
+              'consent', 'clinicId', 'active', 'version', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'];
+    }
+
+    function validEmergencyContact(e) {
+      return e is map
+        && e.keys().hasAll(['name', 'relationship', 'contactNumber'])
+        && e.keys().hasOnly(['name', 'relationship', 'contactNumber'])
+        && str(e.name, 1, 120)
+        && str(e.relationship, 1, 60)
+        && str(e.contactNumber, 7, 20);
+    }
+
+    function validPregnancy(p) {
+      return p is map
+        && p.keys().hasAll(['lmp', 'edd', 'gravida', 'para'])
+        && p.keys().hasOnly(['lmp', 'edd', 'gravida', 'para'])
+        && isoDate(p.lmp)
+        && isoDate(p.edd)
+        && p.gravida is int && p.gravida >= 1 && p.gravida <= 20
+        && p.para is int && p.para >= 0 && p.para <= 20;
+    }
+
+    function validConsent(c) {
+      return c is map
+        && c.keys().hasAll(['dataSharingForReferral', 'capturedAt', 'capturedBy'])
+        && c.keys().hasOnly(['dataSharingForReferral', 'capturedAt', 'capturedBy'])
+        && c.dataSharingForReferral is bool
+        && c.capturedAt is timestamp
+        && c.capturedBy is string;
+    }
+
+    function validPatient(d) {
+      return d.keys().hasAll(patientKeys()) && d.keys().hasOnly(patientKeys())
+        && d.patientId is string && d.patientId.matches('^MARA-PAT-[0-9A-Z]{4,12}$')
+        && str(d.name, 1, 120)
+        && d.nameLower == d.name.lower()
+        && isoDate(d.birthdate)
+        && str(d.address, 1, 300)
+        && str(d.barangay, 1, 120)
+        && str(d.contactNumber, 7, 20)
+        && validEmergencyContact(d.emergencyContact)
+        && validPregnancy(d.pregnancy)
+        && strList(d.allergies, 50)
+        && d.bloodType in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown']
+        && strList(d.medicalHistory, 50)
+        && strList(d.obstetricHistory, 50)
+        && validConsent(d.consent)
+        && d.clinicId is string
+        && d.active is bool
+        && d.version is int
+        && d.createdAt is timestamp
+        && d.createdBy is string
+        && d.updatedAt is timestamp
+        && d.updatedBy is string;
+    }
+
+    match /patients/{patientId} {
+      // super_admin intentionally has NO access to patient charts.
+      allow read: if isClinicStaff(resource.data.clinicId);
+
+      allow create: if isClinicStaff(request.resource.data.clinicId)
+        && isActiveStaff()
+        && validPatient(request.resource.data)
+        && request.resource.data.patientId == patientId
+        && request.resource.data.createdBy == uid()
+        && request.resource.data.updatedBy == uid()
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.version == 1
+        && request.resource.data.consent.capturedBy == uid()
+        && request.resource.data.consent.capturedAt == request.time;
+
+      allow update: if isClinicStaff(resource.data.clinicId)
+        && isActiveStaff()
+        && validPatient(request.resource.data)
+        && unchanged(['clinicId', 'patientId', 'createdAt', 'createdBy'])
+        // Optimistic concurrency: stale (offline) writes based on an older version are rejected.
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.updatedBy == uid()
+        && request.resource.data.updatedAt == request.time
+        && (unchanged(['consent'])
+            || (request.resource.data.consent.capturedBy == uid()
+                && request.resource.data.consent.capturedAt == request.time));
+
+      // Records are never hard-deleted by clients (see docs/DATA_RETENTION.md).
+      allow delete: if false;
+
+      // ─────────── patients/{patientId}/visits/{visitId} ───────────
+
+      function visitKeys() {
+        return ['visitId', 'patientId', 'clinicId', 'visitDate', 'bpSystolic', 'bpDiastolic', 'weightKg',
+                'fhr', 'glucoseMgDl', 'fundalHeightCm', 'urineProtein', 'urineGlucose', 'medications', 'notes',
+                'dangerSigns', 'createdAt', 'createdBy', 'createdByName', 'version', 'updatedAt', 'updatedBy'];
+      }
+
+      function requiredVisitKeys() {
+        return ['visitId', 'patientId', 'clinicId', 'visitDate', 'bpSystolic', 'bpDiastolic', 'weightKg',
+                'urineProtein', 'urineGlucose', 'medications', 'notes', 'dangerSigns', 'createdAt', 'createdBy',
+                'createdByName', 'version', 'updatedAt', 'updatedBy'];
+      }
+
+      function validDangerSigns(s) {
+        return s is map
+          && s.keys().hasAll(['bleeding', 'severeHeadache', 'blurredVision', 'reducedFetalMovement'])
+          && s.keys().hasOnly(['bleeding', 'severeHeadache', 'blurredVision', 'reducedFetalMovement'])
+          && s.bleeding is bool
+          && s.severeHeadache is bool
+          && s.blurredVision is bool
+          && s.reducedFetalMovement is bool;
+      }
+
+      function urine() {
+        return ['not_done', 'negative', 'trace', '1+', '2+', '3+', '4+'];
+      }
+
+      function validVisit(d) {
+        return d.keys().hasAll(requiredVisitKeys()) && d.keys().hasOnly(visitKeys())
+          && isoDate(d.visitDate)
+          && numIn(d.bpSystolic, 30, 300)
+          && numIn(d.bpDiastolic, 10, 200)
+          && d.bpSystolic > d.bpDiastolic
+          && numIn(d.weightKg, 20, 300)
+          && optNumIn(d, 'fhr', 30, 260)
+          && optNumIn(d, 'glucoseMgDl', 10, 1000)
+          && optNumIn(d, 'fundalHeightCm', 1, 60)
+          && d.urineProtein in urine()
+          && d.urineGlucose in urine()
+          && strList(d.medications, 50)
+          && d.notes is string && d.notes.size() <= 4000
+          && validDangerSigns(d.dangerSigns)
+          && str(d.createdByName, 1, 120)
+          && d.version is int
+          && d.createdAt is timestamp
+          && d.updatedAt is timestamp
+          && d.createdBy is string
+          && d.updatedBy is string;
+      }
+
+      match /visits/{visitId} {
+        allow read: if resource.data.clinicId == get(patientPath(patientId)).data.clinicId
+          && isClinicStaff(resource.data.clinicId);
+
+        allow create: if exists(patientPath(patientId))
+          && isClinicStaff(get(patientPath(patientId)).data.clinicId)
+          && isActiveStaff()
+          && request.resource.data.clinicId == get(patientPath(patientId)).data.clinicId
+          && validVisit(request.resource.data)
+          && request.resource.data.patientId == patientId
+          && request.resource.data.visitId == visitId
+          && request.resource.data.createdBy == uid()
+          && request.resource.data.updatedBy == uid()
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.version == 1;
+
+        allow update: if isClinicStaff(resource.data.clinicId)
+          && isActiveStaff()
+          && validVisit(request.resource.data)
+          && unchanged(['visitId', 'patientId', 'clinicId', 'createdAt', 'createdBy', 'createdByName'])
+          && request.resource.data.version == resource.data.version + 1
+          && request.resource.data.updatedBy == uid()
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if false;
+      }
+    }
+
+    // Collection-group READ for the pending-sync / dashboard listener:
+    //   collectionGroup('visits').where('clinicId', '==', <own clinic>)
+    // Read only. Writes are governed exclusively by the nested rule above.
+    match /{path=**}/visits/{visitId} {
+      allow read: if isClinicStaff(resource.data.clinicId);
+    }
+
+    // ───────────────────────────── referrals ─────────────────────────────
+
+    match /referrals/{referralId} {
+      // Own-clinic staff only. super_admin gets count-only reports via the
+      // getReferralReport callable and never reads referral contents.
+      allow read: if isClinicStaff(resource.data.clinicId);
+      // All referral writes go through Cloud Functions (Admin SDK).
+      allow write: if false;
+    }
+
+    // ───────────────────────────── hospitals ─────────────────────────────
+
+    function hospitalKeys() {
+      return ['name', 'address', 'phone', 'referralLevel', 'services', 'latitude', 'longitude',
+              'dohNetworked', 'active', 'createdAt', 'updatedAt'];
+    }
+
+    function validHospital(d) {
+      return d.keys().hasAll(hospitalKeys()) && d.keys().hasOnly(hospitalKeys())
+        && str(d.name, 1, 160)
+        && str(d.address, 1, 300)
+        && str(d.phone, 7, 20)
+        && d.referralLevel in [1, 2, 3]
+        && d.services is list && d.services.size() <= 10
+        && d.services.toSet().hasOnly(['CEmONC', 'BEmONC', 'NICU', 'Emergency'])
+        && numIn(d.latitude, -90, 90)
+        && numIn(d.longitude, -180, 180)
+        && d.dohNetworked is bool
+        && d.active is bool
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    match /hospitals/{hospitalId} {
+      allow read: if isStaff();
+      allow create: if isSuper()
+        && validHospital(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isSuper()
+        && validHospital(request.resource.data)
+        && unchanged(['createdAt'])
+        && request.resource.data.updatedAt == request.time;
+      // Never delete; deactivate with active = false.
+      allow delete: if false;
+    }
+
+    // ───────────────────────────── auditLogs ─────────────────────────────
+
+    function auditKeys() {
+      return ['action', 'actorKind', 'actorUid', 'actorRole', 'clinicId', 'patientId', 'referralId', 'at', 'details'];
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isClinicAdmin(resource.data.clinicId) || isSuper();
+
+      // Clients may only append CLIENT_AUDIT_ACTIONS about themselves; everything else is server-written.
+      allow create: if isClinicStaff(clinicId())
+        && isActiveStaff()
+        && request.resource.data.keys().hasAll(auditKeys())
+        && request.resource.data.keys().hasOnly(auditKeys())
+        && request.resource.data.action in ['patient_viewed', 'patient_created', 'patient_edited', 'visit_created', 'visit_edited']
+        && request.resource.data.actorKind == 'user'
+        && request.resource.data.actorUid == uid()
+        && request.resource.data.actorRole == role()
+        && request.resource.data.clinicId == clinicId()
+        && (request.resource.data.patientId == null
+            || (str(request.resource.data.patientId, 1, 64)
+                && exists(patientPath(request.resource.data.patientId))
+                && get(patientPath(request.resource.data.patientId)).data.clinicId == clinicId()))
+        && request.resource.data.referralId == null
+        && request.resource.data.at == request.time
+        // Client audit entries carry no free-form details at all.
+        && request.resource.data.details is map
+        && request.resource.data.details.size() == 0;
+
+      // Append-only.
+      allow update, delete: if false;
+    }
+
+    // ───────────────────────────── smsLogs ─────────────────────────────
+
+    match /smsLogs/{smsId} {
+      // Contains recipient phone numbers: own-clinic staff only (not super_admin).
+      allow read: if isClinicStaff(resource.data.clinicId);
+      allow write: if false;
+    }
+
+    // ───────────────────────────── referralRequests (offline emergency queue) ─────────────────────────────
+
+    function referralRequestKeys() {
+      return ['patientId', 'hospitalId', 'reasonCode', 'reasonText', 'clientRequestId', 'type', 'clinicId',
+              'createdBy', 'createdAt', 'state', 'referralId', 'error', 'processedAt'];
+    }
+
+    match /referralRequests/{requestId} {
+      allow read: if (signedIn() && resource.data.createdBy == uid())
+        || isClinicStaff(resource.data.clinicId);
+
+      allow create: if isClinicStaff(request.resource.data.clinicId)
+        && isActiveStaff()
+        && request.resource.data.keys().hasAll(referralRequestKeys())
+        && request.resource.data.keys().hasOnly(referralRequestKeys())
+        && request.resource.data.clientRequestId == requestId
+        && requestId.matches('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+        && request.resource.data.type == 'emergency'
+        && request.resource.data.state == 'queued'
+        && request.resource.data.referralId == null
+        && request.resource.data.error == null
+        && request.resource.data.processedAt == null
+        && request.resource.data.createdBy == uid()
+        && request.resource.data.createdAt == request.time
+        && str(request.resource.data.patientId, 1, 64)
+        && str(request.resource.data.hospitalId, 1, 64)
+        && request.resource.data.reasonCode in ['severe_bleeding', 'headache_visual', 'reduced_fetal_movement',
+                                                'abnormal_vitals', 'labor_complication', 'other']
+        && request.resource.data.reasonText is string
+        && request.resource.data.reasonText.size() <= 1000
+        // The patient must belong to the caller's clinic (the trigger re-validates server-side).
+        && exists(patientPath(request.resource.data.patientId))
+        && get(patientPath(request.resource.data.patientId)).data.clinicId == request.resource.data.clinicId;
+
+      // Processed by a Cloud Functions trigger (Admin SDK) only.
+      allow update, delete: if false;
+    }
+
+    // ───────────────────────────── server-only collections ─────────────────────────────
+
+    match /referralTokens/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rateLimits/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Clinic server (join) codes: issued and checked only by Cloud Functions (registerClinic / joinClinic /
+    // getClinicJoinCode / rotateClinicJoinCode). Never listable or readable, so codes cannot be enumerated.
+    match /clinicJoinCodes/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Everything not matched above is denied by default (no catch-all allow).
+  }
+}

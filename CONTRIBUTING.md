@@ -6,7 +6,8 @@ Thanks for your interest in contributing. This guide covers how to set up your e
 
 1. Fork and clone the repository.
 2. Install dependencies with `npm install`.
-3. Start the dev server with `npx expo start`.
+3. Follow "Local development" in the README (emulators + `npm run dev`).
+4. Read `.kiro/steering/mara-contracts.md` for shared contracts and file ownership.
 
 ## Branching
 

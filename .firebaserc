@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "demo-mara",
+    "development": "demo-mara",
+    "production": "REPLACE_WITH_PRODUCTION_PROJECT_ID"
+  }
+}
